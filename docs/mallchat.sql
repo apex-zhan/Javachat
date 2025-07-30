@@ -117,6 +117,8 @@ CREATE TABLE `user_backpack`  (
   INDEX `idx_update_time`(`update_time`) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户背包表' ROW_FORMAT = Dynamic;
 
+
+
 DROP TABLE IF EXISTS `wx_msg`;
 CREATE TABLE `wx_msg`  (
   `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'id',
@@ -130,6 +132,8 @@ CREATE TABLE `wx_msg`  (
   INDEX `idx_update_time`(`update_time`) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '微信消息表' ROW_FORMAT = Dynamic;
 
+
+
 DROP TABLE IF EXISTS `black`;
 CREATE TABLE `black`  (
   `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'id',
@@ -140,6 +144,7 @@ CREATE TABLE `black`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `idx_type_target`(`type`, `target`) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '黑名单' ROW_FORMAT = Dynamic;
+
 
 DROP TABLE IF EXISTS `role`;
 CREATE TABLE `role` (
@@ -153,6 +158,7 @@ CREATE TABLE `role` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='角色表';
 insert into role(id,`name`) values(1,'超级管理员');
 insert into role(id,`name`) values(2,'抹茶群聊管理员');
+
 
 DROP TABLE IF EXISTS `user_role`;
 CREATE TABLE `user_role` (
@@ -168,12 +174,16 @@ CREATE TABLE `user_role` (
   KEY `idx_update_time` (`update_time`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户角色关系表';
 
+
+
 DROP TABLE IF EXISTS `sensitive_word`;
 CREATE TABLE `sensitive_word` (
   `word` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '敏感词'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='敏感词库';
 INSERT INTO `sensitive_word` (`word`) VALUES ('TMD');
 INSERT INTO `sensitive_word` (`word`) VALUES ('tmd');
+
+
 
 DROP TABLE IF EXISTS `user_emoji`;
 CREATE TABLE `user_emoji` (
@@ -186,6 +196,10 @@ CREATE TABLE `user_emoji` (
   PRIMARY KEY (`id`) USING BTREE,
   KEY `IDX_USER_EMOJIS_UID` (`uid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC COMMENT='用户表情包';
+
+
+
+
 ###单聊群聊功能
 DROP TABLE IF EXISTS `user_apply`;
 CREATE TABLE `user_apply` (
@@ -206,6 +220,8 @@ CREATE TABLE `user_apply` (
   KEY `idx_update_time` (`update_time`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户申请表';
 DROP TABLE IF EXISTS `user_friend`;
+
+
 CREATE TABLE `user_friend` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT 'id',
   `uid` bigint(20) NOT NULL COMMENT 'uid',
@@ -219,6 +235,9 @@ CREATE TABLE `user_friend` (
   KEY `idx_update_time` (`update_time`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户联系人表';
 DROP TABLE IF EXISTS `room`;
+
+
+
 CREATE TABLE `room` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT 'id',
   `type` int(11) NOT NULL COMMENT '房间类型 1群聊 2单聊',
@@ -233,6 +252,9 @@ CREATE TABLE `room` (
   KEY `idx_update_time` (`update_time`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='房间表';
 DROP TABLE IF EXISTS `room_friend`;
+
+
+
 CREATE TABLE `room_friend` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT 'id',
   `room_id` bigint(20) NOT NULL COMMENT '房间id',
@@ -249,6 +271,9 @@ CREATE TABLE `room_friend` (
   KEY `idx_update_time` (`update_time`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='单聊房间表';
 DROP TABLE IF EXISTS `room_group`;
+
+
+
 CREATE TABLE `room_group` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT 'id',
   `room_id` bigint(20) NOT NULL COMMENT '房间id',
@@ -264,6 +289,9 @@ CREATE TABLE `room_group` (
   KEY `idx_update_time` (`update_time`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='群聊房间表';
 DROP TABLE IF EXISTS `group_member`;
+
+
+
 CREATE TABLE `group_member` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT 'id',
   `group_id` bigint(20) NOT NULL COMMENT '群组id',
@@ -277,6 +305,9 @@ CREATE TABLE `group_member` (
   KEY `idx_update_time` (`update_time`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='群成员表';
 DROP TABLE IF EXISTS `contact`;
+
+
+
 CREATE TABLE `contact` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT 'id',
   `uid` bigint(20) NOT NULL COMMENT 'uid',
@@ -297,6 +328,10 @@ INSERT INTO `user` (`id`, `name`, `avatar`, `sex`, `open_id`, `last_opt_time`, `
 insert INTO `room`(`id`,`type`,`hot_flag`) values (1,1,1);
 insert INTO `room_group`(`id`,`room_id`,`name`,`avatar`) values (1,1,'抹茶全员群','https://mallchat.cn/assets/logo-e81cd252.jpeg');
 DROP TABLE IF EXISTS `secure_invoke_record`;
+
+
+
+
 CREATE TABLE `secure_invoke_record` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT 'id',
   `secure_invoke_json` json NOT NULL COMMENT '请求快照参数json',

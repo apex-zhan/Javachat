@@ -28,6 +28,12 @@ public class WSAdapter {
     @Autowired
     private ChatService chatService;
 
+    /**
+     * 构建登录响应
+     *
+     * @param wxMpQrCodeTicket
+     * @return
+     */
     public static WSBaseResp<WSLoginUrl> buildLoginResp(WxMpQrCodeTicket wxMpQrCodeTicket) {
         WSBaseResp<WSLoginUrl> wsBaseResp = new WSBaseResp<>();
         wsBaseResp.setType(WSRespTypeEnum.LOGIN_URL.getType());
@@ -35,6 +41,14 @@ public class WSAdapter {
         return wsBaseResp;
     }
 
+    /**
+     * 构建登录成功响应
+     *
+     * @param user
+     * @param token
+     * @param hasPower
+     * @return
+     */
     public static WSBaseResp<WSLoginSuccess> buildLoginSuccessResp(User user, String token, boolean hasPower) {
         WSBaseResp<WSLoginSuccess> wsBaseResp = new WSBaseResp<>();
         wsBaseResp.setType(WSRespTypeEnum.LOGIN_SUCCESS.getType());
@@ -49,12 +63,23 @@ public class WSAdapter {
         return wsBaseResp;
     }
 
+    /**
+     * 构建扫码登录成功响应
+     *
+     * @return
+     */
     public static WSBaseResp buildScanSuccessResp() {
         WSBaseResp wsBaseResp = new WSBaseResp();
         wsBaseResp.setType(WSRespTypeEnum.LOGIN_SCAN_SUCCESS.getType());
         return wsBaseResp;
     }
 
+    /**
+     * 构建消息撤回响应
+     *
+     * @param recallDTO
+     * @return
+     */
     public static WSBaseResp<?> buildMsgRecall(ChatMsgRecallDTO recallDTO) {
         WSBaseResp<WSMsgRecall> wsBaseResp = new WSBaseResp<>();
         wsBaseResp.setType(WSRespTypeEnum.RECALL.getType());
@@ -64,6 +89,12 @@ public class WSAdapter {
         return wsBaseResp;
     }
 
+    /**
+     * 构建在线通知响应
+     *
+     * @param user
+     * @return
+     */
     public WSBaseResp<WSOnlineOfflineNotify> buildOnlineNotifyResp(User user) {
         WSBaseResp<WSOnlineOfflineNotify> wsBaseResp = new WSBaseResp<>();
         wsBaseResp.setType(WSRespTypeEnum.ONLINE_OFFLINE_NOTIFY.getType());
@@ -74,6 +105,12 @@ public class WSAdapter {
         return wsBaseResp;
     }
 
+    /**
+     * 构建离线通知响应
+     *
+     * @param user
+     * @return
+     */
     public WSBaseResp<WSOnlineOfflineNotify> buildOfflineNotifyResp(User user) {
         WSBaseResp<WSOnlineOfflineNotify> wsBaseResp = new WSBaseResp<>();
         wsBaseResp.setType(WSRespTypeEnum.ONLINE_OFFLINE_NOTIFY.getType());
@@ -84,11 +121,22 @@ public class WSAdapter {
         return wsBaseResp;
     }
 
+    /**
+     * 组装在线人数
+     *
+     * @param onlineOfflineNotify
+     */
     private void assembleNum(WSOnlineOfflineNotify onlineOfflineNotify) {
         ChatMemberStatisticResp memberStatistic = chatService.getMemberStatistic();
         onlineOfflineNotify.setOnlineNum(memberStatistic.getOnlineNum());
     }
 
+    /**
+     * 构建在线用户信息
+     *
+     * @param user
+     * @return
+     */
     private static ChatMemberResp buildOnlineInfo(User user) {
         ChatMemberResp info = new ChatMemberResp();
         BeanUtil.copyProperties(user, info);
@@ -98,6 +146,12 @@ public class WSAdapter {
         return info;
     }
 
+    /**
+     * 构建离线用户信息
+     *
+     * @param user
+     * @return
+     */
     private static ChatMemberResp buildOfflineInfo(User user) {
         ChatMemberResp info = new ChatMemberResp();
         BeanUtil.copyProperties(user, info);
@@ -107,12 +161,23 @@ public class WSAdapter {
         return info;
     }
 
+    /**
+     * 构建token失效响应
+     *
+     * @return
+     */
     public static WSBaseResp<WSLoginSuccess> buildInvalidateTokenResp() {
         WSBaseResp<WSLoginSuccess> wsBaseResp = new WSBaseResp<>();
         wsBaseResp.setType(WSRespTypeEnum.INVALIDATE_TOKEN.getType());
         return wsBaseResp;
     }
 
+    /**
+     * 构建消息发送响应
+     *
+     * @param msgResp
+     * @return
+     */
     public static WSBaseResp<ChatMessageResp> buildMsgSend(ChatMessageResp msgResp) {
         WSBaseResp<ChatMessageResp> wsBaseResp = new WSBaseResp<>();
         wsBaseResp.setType(WSRespTypeEnum.MESSAGE.getType());
@@ -120,6 +185,13 @@ public class WSAdapter {
         return wsBaseResp;
     }
 
+    /**
+     * 构建消息标记发送响应
+     *
+     * @param dto
+     * @param markCount
+     * @return
+     */
     public static WSBaseResp<WSMsgMark> buildMsgMarkSend(ChatMessageMarkDTO dto, Integer markCount) {
         WSMsgMark.WSMsgMarkItem item = new WSMsgMark.WSMsgMarkItem();
         BeanUtils.copyProperties(dto, item);
@@ -132,6 +204,12 @@ public class WSAdapter {
         return wsBaseResp;
     }
 
+    /**
+     * 构建好友申请发送响应
+     *
+     * @param resp
+     * @return
+     */
     public static WSBaseResp<WSFriendApply> buildApplySend(WSFriendApply resp) {
         WSBaseResp<WSFriendApply> wsBaseResp = new WSBaseResp<>();
         wsBaseResp.setType(WSRespTypeEnum.APPLY.getType());

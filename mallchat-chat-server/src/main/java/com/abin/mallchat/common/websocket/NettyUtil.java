@@ -18,11 +18,27 @@ public class NettyUtil {
     public static AttributeKey<Long> UID = AttributeKey.valueOf("uid");
     public static AttributeKey<WebSocketServerHandshaker> HANDSHAKER_ATTR_KEY = AttributeKey.valueOf(WebSocketServerHandshaker.class, "HANDSHAKER");
 
+    /**
+     * 设置Channel属性
+     *
+     * @param channel
+     * @param attributeKey
+     * @param data
+     * @param <T>
+     */
     public static <T> void setAttr(Channel channel, AttributeKey<T> attributeKey, T data) {
         Attribute<T> attr = channel.attr(attributeKey);
         attr.set(data);
     }
 
+    /**
+     * 获取Channel属性
+     *
+     * @param channel
+     * @param ip
+     * @param <T>
+     * @return
+     */
     public static <T> T getAttr(Channel channel, AttributeKey<T> ip) {
         return channel.attr(ip).get();
     }

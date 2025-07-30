@@ -32,6 +32,10 @@ public class ThreadPoolConfig implements AsyncConfigurer, SecureInvokeConfigurer
 
     public static final String AICHAT_EXECUTOR = "aichatExecutor";
 
+    /**
+     * 对@Async注解的支持
+     * @return
+     */
     @Override
     public Executor getAsyncExecutor() {
         return mallchatExecutor();
@@ -46,6 +50,7 @@ public class ThreadPoolConfig implements AsyncConfigurer, SecureInvokeConfigurer
     @Primary
     public ThreadPoolTaskExecutor mallchatExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setWaitForTasksToCompleteOnShutdown(true);//开启spring支持的优雅停机
         executor.setCorePoolSize(10);
         executor.setMaxPoolSize(10);
         executor.setQueueCapacity(200);

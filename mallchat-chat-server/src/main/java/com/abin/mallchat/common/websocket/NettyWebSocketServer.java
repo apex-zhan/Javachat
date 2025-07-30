@@ -88,7 +88,18 @@ public class NettyWebSocketServer {
                          *  2. 这就是为什么当浏览器发送大量数据时，就会发出多次 http请求的原因
                          */
                         pipeline.addLast(new HttpObjectAggregator(8192));
-                        //保存用户ip
+                        /**
+                         *  // 添加自定义的处理器，用于处理 HTTP 请求头
+                         *  // 主要是提取 token 和 IP 地址，并设置到 Channel 的属性中
+                         *  // 这样后续的业务逻辑处理器就可以使用这些信息了
+                         *  // 最后，它会移除当前处理器，继续传递请求到下一个处理器。
+                         *  // 例如：NettyUtil.getAttr(ctx.channel(), NettyUtil.TOKEN)
+                         *  // 这里的 HttpHeadersHandler 是一个自定义的 ChannelInboundHandlerAdapter 实现
+                         *  // 它会在握手 HTTP 请求阶段解析 URL 参数中的 token，并通过 NettyUtil.setAttr 存入 Channel 属性，后续认证使用。
+                         *  // 同时，它还会从请求头中获取 X-Real-IP，如果没有，则从远程地址获取 IP，并将其存入 Channel 属性，后续可以通过 NettyUtil.getAttr(ctx.channel(), NettyUtil.IP) 获取。
+                         *  // 这样可以确保在处理 WebSocket 协议之前，已经处理了 HTTP 请求头，并提取了必要的信息。
+                         */
+
                         pipeline.addLast(new HttpHeadersHandler());
                         /**
                          * 说明：

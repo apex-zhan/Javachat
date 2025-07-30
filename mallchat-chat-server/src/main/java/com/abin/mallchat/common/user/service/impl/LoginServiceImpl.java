@@ -43,6 +43,7 @@ public class LoginServiceImpl implements LoginService {
         }
         String key = RedisKey.getKey(RedisKey.USER_TOKEN_STRING, uid);
         String realToken = RedisUtils.getStr(key);
+        //为什么需要判断相等，
         return Objects.equals(token, realToken);//有可能token失效了，需要校验是不是和最新token一致
     }
 
@@ -65,7 +66,9 @@ public class LoginServiceImpl implements LoginService {
 
     @Override
     public String login(Long uid) {
+        //校验uid
         String key = RedisKey.getKey(RedisKey.USER_TOKEN_STRING, uid);
+        //先从redis获取token
         String token = RedisUtils.getStr(key);
         if (StrUtil.isNotBlank(token)) {
             return token;
@@ -80,9 +83,5 @@ public class LoginServiceImpl implements LoginService {
     public Long getValidUid(String token) {
         boolean verify = verify(token);
         return verify ? jwtUtils.getUidOrNull(token) : null;
-    }
-
-    public static void main(String[] args) {
-        System.out.println();
     }
 }

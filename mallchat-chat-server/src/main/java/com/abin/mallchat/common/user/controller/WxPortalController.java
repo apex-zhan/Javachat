@@ -71,6 +71,7 @@ public class WxPortalController {
         } catch (Exception e) {
             log.error("callBack error", e);
         }
+        // 重定向到前端页面
         RedirectView redirectView = new RedirectView();
         // 跳转回前端
         redirectView.setUrl("http://127.0.0.1:9988");
@@ -78,17 +79,6 @@ public class WxPortalController {
     }
 
 
-    /**
-     * 微信回调接口
-     * @param requestBody
-     * @param signature
-     * @param timestamp
-     * @param nonce
-     * @param openid
-     * @param encType
-     * @param msgSignature
-     * @return
-     */
     @PostMapping(produces = "application/xml; charset=UTF-8")
     public String post(@RequestBody String requestBody,
                        @RequestParam("signature") String signature,

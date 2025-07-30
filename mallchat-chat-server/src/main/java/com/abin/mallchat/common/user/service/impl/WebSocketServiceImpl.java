@@ -55,10 +55,13 @@ public class WebSocketServiceImpl implements WebSocketService {
     private static final Duration EXPIRE_TIME = Duration.ofHours(1);
     private static final Long MAX_MUM_SIZE = 10000L;
     /**
-     * 所有请求登录的code与channel关系
+     * 所有请求登录的code与channel关系都是存在map中的
+     * 对应的code和channel的关系，过期时间为1小时，防止内存溢出
      */
     public static final Cache<Integer, Channel> WAIT_LOGIN_MAP = Caffeine.newBuilder()
+            //设置写入后过期时间
             .expireAfterWrite(EXPIRE_TIME)
+            //设置缓存的最大容量（最多存储 10,000 个键值对）
             .maximumSize(MAX_MUM_SIZE)
             .build();
     /**
@@ -108,7 +111,7 @@ public class WebSocketServiceImpl implements WebSocketService {
         Integer code = generateLoginCode(channel);
         //请求微信接口，获取登录码地址
         WxMpQrCodeTicket wxMpQrCodeTicket = wxMpService.getQrcodeService().qrCodeCreateTmpTicket(code, (int) EXPIRE_TIME.getSeconds());
-        //返回给前端（channel必在本地）
+        //把码返回给前端的channel上（channel必在本地）
         sendMsg(channel, WSAdapter.buildLoginResp(wxMpQrCodeTicket));
     }
 
@@ -116,14 +119,17 @@ public class WebSocketServiceImpl implements WebSocketService {
     /**
      * 获取不重复的登录的code，微信要求最大不超过int的存储极限
      * 防止并发，可以给方法加上synchronize，也可以使用cas乐观锁
-     *
+     * 采用 do-while 结构实现乐观锁机制（CAS 思想）
+     * 生成一个不重复的登录码。并且将登录码和这个Channel用map关联起来
      * @return
      */
     private Integer generateLoginCode(Channel channel) {
         int inc;
         do {
             //本地cache时间必须比redis key过期时间短，否则会出现并发问题
+            //Redis原子递增生成唯一code，登录码防重
             inc = RedisUtils.integerInc(RedisKey.getKey(LOGIN_CODE), (int) EXPIRE_TIME.toMinutes(), TimeUnit.MINUTES);
+        //如果本地cache map中已经存在这个code，说明已经被其他线程生成了，需要重新生成
         } while (WAIT_LOGIN_MAP.asMap().containsKey(inc));
         //储存一份在本地
         WAIT_LOGIN_MAP.put(inc, channel);
@@ -132,6 +138,7 @@ public class WebSocketServiceImpl implements WebSocketService {
 
     /**
      * 处理所有ws连接的事件
+     * 将Channel和用户id关联起来
      *
      * @param channel
      */
@@ -154,6 +161,11 @@ public class WebSocketServiceImpl implements WebSocketService {
         }
     }
 
+    /**
+     * 用户授权登录
+     * @param channel
+     * @param wsAuthorize
+     */
     @Override
     public void authorize(Channel channel, WSAuthorize wsAuthorize) {
         //校验token

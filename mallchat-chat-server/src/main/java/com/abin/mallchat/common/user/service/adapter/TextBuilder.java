@@ -7,6 +7,7 @@ import me.chanjar.weixin.mp.bean.message.WxMpXmlOutTextMessage;
 
 /**
  * @author <a href="https://github.com/binarywang">Binary Wang</a>
+ * @desc 文本消息构建器，用于构建文本消息对象
  */
 public class TextBuilder {
 

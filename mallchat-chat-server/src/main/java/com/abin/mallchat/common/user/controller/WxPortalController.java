@@ -17,6 +17,7 @@ import org.springframework.web.servlet.view.RedirectView;
  * Description: 微信api交互接口
  * Author: <a href="https://github.com/zongzibinbin">abin</a>
  * Date: 2023-03-19
+ *
  * @author abin
  */
 @Slf4j
@@ -31,6 +32,7 @@ public class WxPortalController {
 
     /**
      * 微信认证接口
+     *
      * @param signature
      * @param timestamp
      * @param nonce
@@ -59,6 +61,7 @@ public class WxPortalController {
 
     /**
      * 微信回调接口
+     *
      * @param code
      * @return
      */
@@ -78,7 +81,18 @@ public class WxPortalController {
         return redirectView;
     }
 
-
+    /**
+     * 微信消息接收接口
+     *
+     * @param requestBody
+     * @param signature
+     * @param timestamp
+     * @param nonce
+     * @param openid
+     * @param encType
+     * @param msgSignature
+     * @return
+     */
     @PostMapping(produces = "application/xml; charset=UTF-8")
     public String post(@RequestBody String requestBody,
                        @RequestParam("signature") String signature,
@@ -122,6 +136,12 @@ public class WxPortalController {
         return out;
     }
 
+    /**
+     * 路由消息
+     *
+     * @param message
+     * @return
+     */
     private WxMpXmlOutMessage route(WxMpXmlMessage message) {
         try {
             return this.messageRouter.route(message);

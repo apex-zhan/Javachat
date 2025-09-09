@@ -29,8 +29,18 @@ public class BlackInterceptor implements HandlerInterceptor {
     @Autowired
     private UserCache userCache;
 
+    /**
+     * 拦截器
+     *
+     * @param request  current HTTP request
+     * @param response current HTTP response
+     * @param handler  chosen handler to execute, for type and/or instance evaluation
+     * @return
+     * @throws Exception
+     */
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        //得到黑名单map
         Map<Integer, Set<String>> blackMap = userCache.getBlackMap();
         RequestInfo requestInfo = RequestHolder.get();
         if (inBlackList(requestInfo.getUid(), blackMap.get(BlackTypeEnum.UID.getType()))) {
@@ -44,6 +54,13 @@ public class BlackInterceptor implements HandlerInterceptor {
         return true;
     }
 
+    /**
+     * 在黑名单中
+     *
+     * @param target
+     * @param blackSet
+     * @return
+     */
     private boolean inBlackList(Object target, Set<String> blackSet) {
         if (Objects.isNull(target) || CollectionUtil.isEmpty(blackSet)) {
             return false;

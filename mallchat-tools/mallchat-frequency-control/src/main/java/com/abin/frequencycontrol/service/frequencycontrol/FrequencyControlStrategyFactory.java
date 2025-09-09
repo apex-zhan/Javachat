@@ -43,4 +43,5 @@ public class FrequencyControlStrategyFactory {
     private FrequencyControlStrategyFactory() {
     }
 
+
 }

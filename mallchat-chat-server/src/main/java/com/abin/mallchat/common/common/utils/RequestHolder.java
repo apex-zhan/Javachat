@@ -9,6 +9,7 @@ import com.abin.mallchat.common.common.domain.dto.RequestInfo;
  */
 public class RequestHolder {
 
+    //
     private static final ThreadLocal<RequestInfo> threadLocal = new ThreadLocal<>();
 
     public static void set(RequestInfo requestInfo) {

@@ -40,4 +40,18 @@ public @interface RedissonLock {
      */
     TimeUnit unit() default TimeUnit.MILLISECONDS;
 
+    /**
+     * 锁的过期时间，默认-1，不设置过期时间
+     *
+     * @return
+     */
+    public int expireTime() default -1;
+
+    /**
+     * 锁的场景，主要用于日志记录和监控
+     *
+     * @return
+     */
+    String scene() default "";
+
 }

@@ -32,9 +32,18 @@ public class RoomFriendCache extends AbstractRedisStringCache<Long, RoomFriend> 
         return 5 * 60L;
     }
 
+    /**
+     * 加载群组好友信息
+     *
+     * @param roomIds
+     * @return
+     */
     @Override
     protected Map<Long, RoomFriend> load(List<Long> roomIds) {
+        // 从数据库中查询群组好友信息
         List<RoomFriend> roomGroups = roomFriendDao.listByRoomIds(roomIds);
+        //
         return roomGroups.stream().collect(Collectors.toMap(RoomFriend::getRoomId, Function.identity()));
     }
 }
+//roomGroups.stream().collect(Collectors.toMap(RoomFriend::getRoomId, Function.identity()))

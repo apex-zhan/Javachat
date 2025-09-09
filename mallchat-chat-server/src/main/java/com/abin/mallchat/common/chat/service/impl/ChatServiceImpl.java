@@ -110,16 +110,25 @@ public class ChatServiceImpl implements ChatService {
         return msgId;
     }
 
+    /**
+     * 校验
+     *
+     * @param request
+     * @param uid
+     */
     private void check(ChatMessageReq request, Long uid) {
         Room room = roomCache.get(request.getRoomId());
         if (room.isHotRoom()) {//全员群跳过校验
             return;
         }
+        //如果是私聊，校验是否是好友关系
         if (room.isRoomFriend()) {
             RoomFriend roomFriend = roomFriendDao.getByRoomId(request.getRoomId());
+            //校验是否被拉黑
             AssertUtil.equal(NormalOrNoEnum.NORMAL.getStatus(), roomFriend.getStatus(), "您已经被对方拉黑");
             AssertUtil.isTrue(uid.equals(roomFriend.getUid1()) || uid.equals(roomFriend.getUid2()), "您已经被对方拉黑");
         }
+        //如果是群聊，校验是否是群成员
         if (room.isRoomGroup()) {
             RoomGroup roomGroup = roomGroupCache.get(request.getRoomId());
             GroupMember member = groupMemberDao.getMember(roomGroup.getId(), uid);
@@ -128,6 +137,13 @@ public class ChatServiceImpl implements ChatService {
 
     }
 
+    /**
+     * 根据消息获取消息前端展示的物料
+     *
+     * @param message
+     * @param receiveUid 接受消息的uid，可null
+     * @return
+     */
     @Override
     public ChatMessageResp getMsgResp(Message message, Long receiveUid) {
         return CollUtil.getFirst(getMsgRespBatch(Collections.singletonList(message), receiveUid));

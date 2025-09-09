@@ -26,6 +26,12 @@ public class ItemInfoDTO {
     @ApiModelProperty("徽章说明")
     private String describe;
 
+    /**
+     * 跳过刷新
+     *
+     * @param itemId
+     * @return
+     */
     public static ItemInfoDTO skip(Long itemId) {
         ItemInfoDTO dto = new ItemInfoDTO();
         dto.setItemId(itemId);

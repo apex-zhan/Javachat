@@ -79,6 +79,12 @@ public class LoginServiceImpl implements LoginService {
         return token;
     }
 
+    /**
+     * 如果token有效，返回uid
+     *
+     * @param token
+     * @return
+     */
     @Override
     public Long getValidUid(String token) {
         boolean verify = verify(token);

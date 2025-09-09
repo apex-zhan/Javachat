@@ -3,9 +3,17 @@ package com.abin.mallchat.common.common.service.cache;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 批量缓存接口
+ *
+ * @param <IN>
+ * @param <OUT>
+ */
 public interface BatchCache<IN, OUT> {
     /**
      * 获取单个
+     * IN是key
+     * OUT是value
      */
     OUT get(IN req);
 

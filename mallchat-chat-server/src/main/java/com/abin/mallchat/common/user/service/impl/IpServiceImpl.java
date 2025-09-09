@@ -44,7 +44,11 @@ public class IpServiceImpl implements IpService, DisposableBean {
     @Autowired
     private UserCache userCache;
 
-
+    /**
+     * 异步刷新ip详情
+     *
+     * @param uid
+     */
     @Override
     public void refreshIpDetailAsync(Long uid) {
         EXECUTOR.execute(() -> {
@@ -87,6 +91,12 @@ public class IpServiceImpl implements IpService, DisposableBean {
         return null;
     }
 
+    /**
+     * 通过淘宝ip接口获取ip详情，失败返回null
+     *
+     * @param ip
+     * @return
+     */
     public static IpDetail getIpDetailOrNull(String ip) {
         String body = HttpUtil.get("https://ip.taobao.com/outGetIpInfo?ip=" + ip + "&accessKey=alibaba-inc");
         try {

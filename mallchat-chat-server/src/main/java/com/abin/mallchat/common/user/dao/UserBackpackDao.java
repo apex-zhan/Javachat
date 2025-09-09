@@ -20,7 +20,13 @@ import java.util.List;
  */
 @Service
 public class UserBackpackDao extends ServiceImpl<UserBackpackMapper, UserBackpack> {
-
+    /**
+     * 获取用户背包中物品的数量
+     *
+     * @param uid
+     * @param itemId
+     * @return
+     */
     public Integer getCountByValidItemId(Long uid, Long itemId) {
         return lambdaQuery().eq(UserBackpack::getUid, uid)
                 .eq(UserBackpack::getItemId, itemId)
@@ -28,6 +34,14 @@ public class UserBackpackDao extends ServiceImpl<UserBackpackMapper, UserBackpac
                 .count();
     }
 
+    /**
+     * 获取用户背包中第一个有效的物品
+     *
+     * @param uid    用户ID
+     * @param itemId 物品ID
+     * @return 第一个有效的物品
+     * sql： select * from user_backpack where uid = ? and item_id = ? and status = 0 limit 1
+     */
     public UserBackpack getFirstValidItem(Long uid, Long itemId) {
         LambdaQueryWrapper<UserBackpack> wrapper = new QueryWrapper<UserBackpack>().lambda()
                 .eq(UserBackpack::getUid, uid)
@@ -37,6 +51,13 @@ public class UserBackpackDao extends ServiceImpl<UserBackpackMapper, UserBackpac
         return getOne(wrapper);
     }
 
+    /**
+     * 将物品设置为失效
+     *
+     * @param id 物品ID
+     * @return 是否更新成功
+     * sql: update user_backpack set status = 1 where id = ?
+     */
     public boolean invalidItem(Long id) {
         UserBackpack update = new UserBackpack();
         update.setId(id);
@@ -44,6 +65,13 @@ public class UserBackpackDao extends ServiceImpl<UserBackpackMapper, UserBackpac
         return updateById(update);
     }
 
+    /**
+     * 根据用户ID和物品ID列表获取用户背包
+     *
+     * @param uid
+     * @param itemIds
+     * @return
+     */
     public List<UserBackpack> getByItemIds(Long uid, List<Long> itemIds) {
         return lambdaQuery().eq(UserBackpack::getUid, uid)
                 .in(UserBackpack::getItemId, itemIds)
@@ -58,6 +86,12 @@ public class UserBackpackDao extends ServiceImpl<UserBackpackMapper, UserBackpac
                 .list();
     }
 
+    /**
+     * 根据幂等号查询用户背包
+     *
+     * @param idempotent
+     * @return
+     */
     public UserBackpack getByIdp(String idempotent) {
         return lambdaQuery().eq(UserBackpack::getIdempotent, idempotent).one();
     }

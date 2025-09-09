@@ -11,6 +11,7 @@ import java.util.UUID;
 
 /**
  * Description: 设置链路追踪的值，初期单体项目先简单用
+ * 为每个请求生成唯一的追踪ID，便于分布式链路追踪
  * Author: <a href="https://github.com/zongzibinbin">abin</a>
  * Date: 2023-04-05
  */

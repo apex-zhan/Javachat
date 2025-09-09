@@ -11,6 +11,9 @@ import java.net.InetSocketAddress;
 import java.util.LinkedHashSet;
 import java.util.Optional;
 
+/**
+ * Description: 处理HTTP请求头，提取token和IP地址，并设置到Channel的属性中
+ */
 public class HttpHeadersHandler extends ChannelInboundHandlerAdapter {
     /**
      * 处理HTTP请求头，提取token和IP地址，并设置到Channel的属性中

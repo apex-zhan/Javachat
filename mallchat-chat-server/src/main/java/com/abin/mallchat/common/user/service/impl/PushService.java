@@ -16,18 +16,24 @@ import java.util.List;
  */
 @Service
 public class PushService {
-    @Autowired
+    @Autowired(required = false)
     private MQProducer mqProducer;
 
     public void sendPushMsg(WSBaseResp<?> msg, List<Long> uidList) {
-        mqProducer.sendMsg(MQConstant.PUSH_TOPIC, new PushMessageDTO(uidList, msg));
+        if (mqProducer != null) {
+            mqProducer.sendMsg(MQConstant.PUSH_TOPIC, new PushMessageDTO(uidList, msg));
+        }
     }
 
     public void sendPushMsg(WSBaseResp<?> msg, Long uid) {
-        mqProducer.sendMsg(MQConstant.PUSH_TOPIC, new PushMessageDTO(uid, msg));
+        if (mqProducer != null) {
+            mqProducer.sendMsg(MQConstant.PUSH_TOPIC, new PushMessageDTO(uid, msg));
+        }
     }
 
     public void sendPushMsg(WSBaseResp<?> msg) {
-        mqProducer.sendMsg(MQConstant.PUSH_TOPIC, new PushMessageDTO(msg));
+        if (mqProducer != null) {
+            mqProducer.sendMsg(MQConstant.PUSH_TOPIC, new PushMessageDTO(msg));
+        }
     }
 }

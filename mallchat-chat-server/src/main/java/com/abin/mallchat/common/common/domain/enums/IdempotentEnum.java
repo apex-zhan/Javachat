@@ -22,7 +22,10 @@ public enum IdempotentEnum {
 
     private final Integer type;
     private final String desc;
-
+    /**
+     * 缓存所有枚举值的Map，key为type，value为IdempotentEnum对象
+     * 使用静态代码块初始化，避免每次调用of方法时都进行遍历，这样可以提高性能，减少内存占用
+     */
     private static Map<Integer, IdempotentEnum> cache;
 
     static {

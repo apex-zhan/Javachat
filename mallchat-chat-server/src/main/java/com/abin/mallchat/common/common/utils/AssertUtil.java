@@ -90,6 +90,14 @@ public class AssertUtil {
         }
     }
 
+    /**
+     * 判断是否为true，不是true，则抛异
+     * expression是断言条件，errorEnum是错误枚举，args是错误参数
+     *
+     * @param expression
+     * @param errorEnum
+     * @param args
+     */
     public static void isTrue(boolean expression, ErrorEnum errorEnum, Object... args) {
         if (!expression) {
             throwException(errorEnum, args);

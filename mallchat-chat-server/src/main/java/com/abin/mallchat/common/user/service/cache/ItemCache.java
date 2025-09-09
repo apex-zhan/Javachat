@@ -19,11 +19,23 @@ public class ItemCache {//todo 多级缓存
     @Autowired
     private ItemConfigDao itemConfigDao;
 
+    /**
+     * 获取所有道具
+     *
+     * @param type
+     * @return
+     */
     @Cacheable(cacheNames = "item", key = "'itemsByType:'+#type")
     public List<ItemConfig> getByType(Integer type) {
         return itemConfigDao.getByType(type);
     }
 
+    /**
+     * 根据ID获取道具
+     *
+     * @param itemId
+     * @return
+     */
     @Cacheable(cacheNames = "item", key = "'item:'+#itemId")
     public ItemConfig getById(Long itemId) {
         return itemConfigDao.getById(itemId);

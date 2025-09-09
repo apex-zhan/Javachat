@@ -28,12 +28,12 @@ public class RedissonLockAspect {
     @Autowired
     private LockService lockService;
 
-    @Around("@annotation(com.abin.mallchat.common.common.annotation.RedissonLock)")
+    @Around("@annotation(com.abin.mallchat.common.common.annotation.RedissonLock)") //拦截所有使用了RedissonLock注解的方法
     public Object around(ProceedingJoinPoint joinPoint) throws Throwable {
-        Method method = ((MethodSignature) joinPoint.getSignature()).getMethod();
-        RedissonLock redissonLock = method.getAnnotation(RedissonLock.class);
+        Method method = ((MethodSignature) joinPoint.getSignature()).getMethod();//获取被拦截的方法
+        RedissonLock redissonLock = method.getAnnotation(RedissonLock.class);//获取方法上的RedissonLock注解
         String prefix = StrUtil.isBlank(redissonLock.prefixKey()) ? SpElUtils.getMethodKey(method) : redissonLock.prefixKey();//默认方法限定名+注解排名（可能多个）
-        String key = SpElUtils.parseSpEl(method, joinPoint.getArgs(), redissonLock.key());
-        return lockService.executeWithLockThrows(prefix + ":" + key, redissonLock.waitTime(), redissonLock.unit(), joinPoint::proceed);
+        String key = SpElUtils.parseSpEl(method, joinPoint.getArgs(), redissonLock.key());//获取锁的key，支持SpEL表达式
+        return lockService.executeWithLockThrows(prefix + ":" + key, redissonLock.waitTime(), redissonLock.unit(), joinPoint::proceed);//执行带锁的方法
     }
 }

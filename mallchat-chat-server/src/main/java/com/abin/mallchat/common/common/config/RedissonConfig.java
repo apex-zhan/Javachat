@@ -22,10 +22,12 @@ public class RedissonConfig {
     @Bean
     public RedissonClient redissonClient() {
         Config config = new Config();
-        config.useSingleServer().setAddress("redis://" + redisProperties.getHost() + ":" + redisProperties.getPort()).setDatabase(redisProperties.getDatabase());
+        config.useSingleServer()
+                .setAddress("redis://" + redisProperties.getHost() + ":" + redisProperties.getPort())
+                .setDatabase(redisProperties.getDatabase());
         String password = redisProperties.getPassword();
-        if (StrUtil.isNotBlank(redisProperties.getPassword())) {
-            redisProperties.setPassword(password);
+        if (StrUtil.isNotBlank(password)) {
+            config.useSingleServer().setPassword(password);
         }
         return Redisson.create(config);
     }

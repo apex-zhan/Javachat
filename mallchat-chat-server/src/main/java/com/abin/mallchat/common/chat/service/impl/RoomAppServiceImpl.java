@@ -180,6 +180,12 @@ public class RoomAppServiceImpl implements RoomAppService {
         return chatService.getMemberPage(memberUidList, request);
     }
 
+    /**
+     * 群成员列表-不分页
+     *
+     * @param request
+     * @return
+     */
     @Override
     @Cacheable(cacheNames = "member", key = "'memberList.'+#request.roomId")
     public List<ChatMemberListResp> getMemberList(ChatMessageMemberReq request) {

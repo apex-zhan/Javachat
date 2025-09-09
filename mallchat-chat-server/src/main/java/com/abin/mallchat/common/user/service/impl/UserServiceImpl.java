@@ -73,6 +73,12 @@ public class UserServiceImpl implements UserService {
         return UserAdapter.buildUserInfoResp(userInfo, countByValidItemId);
     }
 
+    /**
+     * 改名卡
+     *
+     * @param uid
+     * @param req
+     */
     @Override
     @Transactional
     public void modifyName(Long uid, ModifyNameReq req) {
@@ -94,6 +100,13 @@ public class UserServiceImpl implements UserService {
         }
     }
 
+
+    /**
+     * 获取用户徽章列表
+     *
+     * @param uid
+     * @return
+     */
     @Override
     public List<BadgeResp> badges(Long uid) {
         //查询所有徽章
@@ -105,6 +118,12 @@ public class UserServiceImpl implements UserService {
         return UserAdapter.buildBadgeResp(itemConfigs, backpacks, user);
     }
 
+    /**
+     * 佩戴徽章
+     *
+     * @param uid
+     * @param req
+     */
     @Override
     public void wearingBadge(Long uid, WearingBadgeReq req) {
         //确保有这个徽章
@@ -119,17 +138,29 @@ public class UserServiceImpl implements UserService {
         userCache.userInfoChange(uid);
     }
 
+    /**
+     * 用户注册，需要获得id
+     *
+     * @param user
+     */
     @Override
     public void register(User user) {
         userDao.save(user);
         applicationEventPublisher.publishEvent(new UserRegisterEvent(this, user));
     }
 
+    /**
+     * 拉黑用户
+     *
+     * @param req
+     */
     @Override
     public void black(BlackReq req) {
         Long uid = req.getUid();
         Black user = new Black();
+        //拉黑目标
         user.setTarget(uid.toString());
+        //拉黑类型
         user.setType(BlackTypeEnum.UID.getType());
         blackDao.save(user);
         User byId = userDao.getById(uid);
@@ -138,6 +169,12 @@ public class UserServiceImpl implements UserService {
         applicationEventPublisher.publishEvent(new UserBlackEvent(this, byId));
     }
 
+    /**
+     * 获取用户汇总信息
+     *
+     * @param req
+     * @return
+     */
     @Override
     public List<SummeryInfoDTO> getSummeryUserInfo(SummeryInfoReq req) {
         //需要前端同步的uid
@@ -151,6 +188,12 @@ public class UserServiceImpl implements UserService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 获取物品信息
+     *
+     * @param req
+     * @return
+     */
     @Override
     public List<ItemInfoDTO> getItemInfo(ItemInfoReq req) {//简单做，更新时间可判断被修改
         return req.getReqList().stream().map(a -> {
@@ -166,6 +209,12 @@ public class UserServiceImpl implements UserService {
         }).collect(Collectors.toList());
     }
 
+    /**
+     * 获取需要前端刷新的uid列表
+     *
+     * @param reqList
+     * @return
+     */
     private List<Long> getNeedSyncUidList(List<SummeryInfoReq.infoReq> reqList) {
         List<Long> needSyncUidList = new ArrayList<>();
         List<Long> userModifyTime = userCache.getUserModifyTime(reqList.stream().map(SummeryInfoReq.infoReq::getUid).collect(Collectors.toList()));
@@ -179,8 +228,14 @@ public class UserServiceImpl implements UserService {
         return needSyncUidList;
     }
 
+    /**
+     * 拉黑IP
+     *
+     * @param ip
+     */
     public void blackIp(String ip) {
         if (StrUtil.isBlank(ip)) {
+            log.warn("black ip is null", ip);
             return;
         }
         try {

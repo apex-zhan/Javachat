@@ -1,15 +1,19 @@
 package com.abin.mallchat.common.user.service.impl;
 
+import com.abin.mallchat.common.MDCKey;
 import com.abin.mallchat.common.common.annotation.RedissonLock;
 import com.abin.mallchat.common.common.domain.enums.IdempotentEnum;
 import com.abin.mallchat.common.common.domain.enums.YesOrNoEnum;
 import com.abin.mallchat.common.common.event.ItemReceiveEvent;
 import com.abin.mallchat.common.user.dao.UserBackpackDao;
 import com.abin.mallchat.common.user.domain.entity.ItemConfig;
+import com.abin.mallchat.common.user.domain.entity.User;
 import com.abin.mallchat.common.user.domain.entity.UserBackpack;
 import com.abin.mallchat.common.user.domain.enums.ItemTypeEnum;
 import com.abin.mallchat.common.user.service.IUserBackpackService;
 import com.abin.mallchat.common.user.service.cache.ItemCache;
+import org.slf4j.MDC;
+import org.springframework.aop.framework.AopContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Lazy;
@@ -35,42 +39,75 @@ public class UserBackpackServiceImpl implements IUserBackpackService {
     private ApplicationEventPublisher applicationEventPublisher;
     @Autowired
     @Lazy
-    private UserBackpackServiceImpl userBackpackService;
+    private UserBackpackServiceImpl userBackpackServiceImpl;
 
+    /**
+     * 用户获取一个物品
+     *
+     * @param uid            用户id
+     * @param itemId         物品id
+     * @param idempotentEnum 幂等类型
+     * @param businessId     上层业务发送的唯一标识
+     */
     @Override
     public void acquireItem(Long uid, Long itemId, IdempotentEnum idempotentEnum, String businessId) {
-        //组装幂等号
+        //1. 组装幂等号
         String idempotent = getIdempotent(itemId, idempotentEnum, businessId);
-        userBackpackService.doAcquireItem(uid, itemId, idempotent);
+        //因为是同类调用所以得使用动态代理，不然注解不生效，或者者直接注入自己
+//      ((UserBackpackServiceImpl)AopContext.currentProxy()).doAcquireItem(uid, itemId, idempotent);
+        userBackpackServiceImpl.doAcquireItem(uid, itemId, idempotent);
     }
 
-    @RedissonLock(key = "#idempotent", waitTime = 5000)//相同幂等如果同时发奖，需要排队等上一个执行完，取出之前数据返回
-    public void doAcquireItem(Long uid, Long itemId, String idempotent) {
+    /**
+     * 用户获取一个物品-加锁幂等
+     *
+     * @param uid
+     * @param itemId
+     * @param idempotent
+     */
+    @RedissonLock(
+            key = "#idempotent",
+            waitTime = 2000,
+            expireTime = 20,
+            scene = "acquireItem")
+    private void doAcquireItem(Long uid, Long itemId, String idempotent) {
         UserBackpack userBackpack = userBackpackDao.getByIdp(idempotent);
-        //幂等检查
+        //1. 幂等检查
         if (Objects.nonNull(userBackpack)) {
             return;
         }
-        //业务检查
-        ItemConfig itemConfig = itemCache.getById(itemId);
-        if (ItemTypeEnum.BADGE.getType().equals(itemConfig.getType())) {//徽章类型做唯一性检查
+        //2. 业务检查(徽章类型唯一性检查，已经有的就不发了)
+        ItemConfig itemCacheById = itemCache.getById(itemId);
+        userBackpackDao.getById(itemId);
+        if (ItemTypeEnum.BADGE.getType().equals(itemCacheById.getType())) {
             Integer countByValidItemId = userBackpackDao.getCountByValidItemId(uid, itemId);
-            if (countByValidItemId > 0) {//已经有徽章了不发
+            if (countByValidItemId > 0) {
                 return;
             }
         }
-        //发物品
+        //3. 发物品
         UserBackpack insert = UserBackpack.builder()
                 .uid(uid)
                 .itemId(itemId)
                 .status(YesOrNoEnum.NO.getStatus())
                 .idempotent(idempotent)
                 .build();
-        userBackpackDao.save(insert);
-        //用户收到物品的事件
+        userBackpackDao.save(userBackpack);
+        //4. 用户收到物品事件
         applicationEventPublisher.publishEvent(new ItemReceiveEvent(this, insert));
+        //5. 发送物品成功日志
+        MDC.put(MDCKey.ITEM_ID, String.valueOf(itemId));
     }
 
+
+    /**
+     * 组装幂等号
+     *
+     * @param itemId
+     * @param idempotentEnum
+     * @param businessId
+     * @return
+     */
     private String getIdempotent(Long itemId, IdempotentEnum idempotentEnum, String businessId) {
         return String.format("%d_%d_%s", itemId, idempotentEnum.getType(), businessId);
     }

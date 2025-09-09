@@ -4,11 +4,18 @@ import com.abin.mallchat.common.common.domain.vo.response.ApiResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.BindException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import javax.servlet.http.HttpServletRequest;
+import java.util.List;
+import java.util.stream.Collectors;
 
 
 @RestControllerAdvice
@@ -21,12 +28,28 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
     public ApiResult methodArgumentNotValidExceptionExceptionHandler(MethodArgumentNotValidException e) {
-        StringBuilder errorMsg = new StringBuilder();
-        e.getBindingResult().getFieldErrors().forEach(x -> errorMsg.append(x.getField()).append(x.getDefaultMessage()).append(","));
-        String message = errorMsg.toString();
-        log.info("validation parameters error！The reason is:{}", message);
-        return ApiResult.fail(CommonErrorEnum.PARAM_VALID.getErrorCode(), message.substring(0, message.length() - 1));
+        // 1. 安全处理空错误列表
+        List<FieldError> errors = e.getBindingResult().getFieldErrors();
+        if (errors.isEmpty()) {
+            return ApiResult.fail(CommonErrorEnum.PARAM_VALID.getErrorCode(), "参数校验失败");
+        }
+
+        // 2. 使用Stream优化拼接
+        String errorMsg = errors.stream()
+                .map(error -> error.getField() + error.getDefaultMessage())
+                .collect(Collectors.joining(", ")); // 自动处理分隔符
+
+        // 3. 增强日志信息
+        HttpServletRequest request = ((ServletRequestAttributes)
+                RequestContextHolder.currentRequestAttributes()).getRequest();
+
+        log.warn("参数校验失败 - URL: {} | 原因: {}",
+                request.getRequestURI(), errorMsg);
+
+        // 4. 返回结构化错误
+        return ApiResult.fail(CommonErrorEnum.PARAM_VALID.getErrorCode(), errorMsg);
     }
+
 
     /**
      * validation参数校验异常

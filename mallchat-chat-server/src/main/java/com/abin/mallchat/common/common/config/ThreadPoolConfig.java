@@ -34,6 +34,7 @@ public class ThreadPoolConfig implements AsyncConfigurer, SecureInvokeConfigurer
 
     /**
      * 对@Async注解的支持
+     *
      * @return
      */
     @Override
@@ -46,6 +47,11 @@ public class ThreadPoolConfig implements AsyncConfigurer, SecureInvokeConfigurer
         return mallchatExecutor();
     }
 
+    /**
+     * 项目共用线程池
+     *
+     * @return
+     */
     @Bean(MALLCHAT_EXECUTOR)
     @Primary
     public ThreadPoolTaskExecutor mallchatExecutor() {
@@ -61,6 +67,11 @@ public class ThreadPoolConfig implements AsyncConfigurer, SecureInvokeConfigurer
         return executor;
     }
 
+    /**
+     * websocket通信线程池
+     *
+     * @return
+     */
     @Bean(WS_EXECUTOR)
     public ThreadPoolTaskExecutor websocketExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
@@ -74,6 +85,11 @@ public class ThreadPoolConfig implements AsyncConfigurer, SecureInvokeConfigurer
         return executor;
     }
 
+    /**
+     * AI聊天线程池
+     *
+     * @return
+     */
     @Bean(AICHAT_EXECUTOR)
     public ThreadPoolTaskExecutor chatAiExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();

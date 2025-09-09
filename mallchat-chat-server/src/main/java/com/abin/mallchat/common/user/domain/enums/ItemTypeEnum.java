@@ -25,10 +25,21 @@ public enum ItemTypeEnum {
 
     private static Map<Integer, ItemTypeEnum> cache;
 
+    /**
+     * 初始化缓存
+     * 为什么要用静态代码块，因为枚举类的构造函数是私有的，不能在外部调用，所以只能在静态代码块中初始化缓存
+     * 这样可以确保在类加载时就初始化缓存，避免每次调用 of 方法时都要遍历枚举值，提升性能
+     */
     static {
         cache = Arrays.stream(ItemTypeEnum.values()).collect(Collectors.toMap(ItemTypeEnum::getType, Function.identity()));
     }
 
+    /**
+     * 根据类型获取物品类型枚举
+     *
+     * @param type
+     * @return
+     */
     public static ItemTypeEnum of(Integer type) {
         return cache.get(type);
     }

@@ -96,7 +96,7 @@ public class WebSocketServiceImpl implements WebSocketService {
     private UserCache userCache;
     @Autowired
     private IRoleService iRoleService;
-    @Autowired
+    @Autowired(required = false)
     private MQProducer mqProducer;
 
     /**
@@ -121,6 +121,7 @@ public class WebSocketServiceImpl implements WebSocketService {
      * 防止并发，可以给方法加上synchronize，也可以使用cas乐观锁
      * 采用 do-while 结构实现乐观锁机制（CAS 思想）
      * 生成一个不重复的登录码。并且将登录码和这个Channel用map关联起来
+     *
      * @return
      */
     private Integer generateLoginCode(Channel channel) {
@@ -129,7 +130,7 @@ public class WebSocketServiceImpl implements WebSocketService {
             //本地cache时间必须比redis key过期时间短，否则会出现并发问题
             //Redis原子递增生成唯一code，登录码防重
             inc = RedisUtils.integerInc(RedisKey.getKey(LOGIN_CODE), (int) EXPIRE_TIME.toMinutes(), TimeUnit.MINUTES);
-        //如果本地cache map中已经存在这个code，说明已经被其他线程生成了，需要重新生成
+            //如果本地cache map中已经存在这个code，说明已经被其他线程生成了，需要重新生成
         } while (WAIT_LOGIN_MAP.asMap().containsKey(inc));
         //储存一份在本地
         WAIT_LOGIN_MAP.put(inc, channel);
@@ -147,6 +148,11 @@ public class WebSocketServiceImpl implements WebSocketService {
         ONLINE_WS_MAP.put(channel, new WSChannelExtraDTO());
     }
 
+    /**
+     * 处理所有ws断连的事件
+     *
+     * @param channel
+     */
     @Override
     public void removed(Channel channel) {
         WSChannelExtraDTO wsChannelExtraDTO = ONLINE_WS_MAP.get(channel);
@@ -163,6 +169,7 @@ public class WebSocketServiceImpl implements WebSocketService {
 
     /**
      * 用户授权登录
+     *
      * @param channel
      * @param wsAuthorize
      */

@@ -4,6 +4,9 @@ import com.abin.mallchat.common.user.domain.entity.User;
 import lombok.Getter;
 import org.springframework.context.ApplicationEvent;
 
+/**
+ * Description: 用户注册事件
+ */
 @Getter
 public class UserRegisterEvent extends ApplicationEvent {
     private final User user;

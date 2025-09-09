@@ -45,16 +45,19 @@ public class WxMsgService {
     private UserDao userDao;
     @Autowired
     private UserService userService;
-    @Autowired
+    @Autowired(required = false)
     private MQProducer mqProducer;
 
     public WxMpXmlOutMessage scan(WxMpService wxMpService, WxMpXmlMessage wxMpXmlMessage) {
+        //得到扫码的用户openid和登录场景code
         String openid = wxMpXmlMessage.getFromUser();
         Integer loginCode = Integer.parseInt(getEventKey(wxMpXmlMessage));
         User user = userDao.getByOpenId(openid);
         //如果已经注册,直接登录成功
         if (Objects.nonNull(user) && StringUtils.isNotEmpty(user.getAvatar())) {
-            mqProducer.sendMsg(MQConstant.LOGIN_MSG_TOPIC, new LoginMessageDTO(user.getId(), loginCode));
+            if (mqProducer != null) {
+                mqProducer.sendMsg(MQConstant.LOGIN_MSG_TOPIC, new LoginMessageDTO(user.getId(), loginCode));
+            }
             return null;
         }
 
@@ -66,12 +69,20 @@ public class WxMsgService {
         //在redis中保存openid和场景code的关系，后续才能通知到前端,旧版数据没有清除,这里设置了过期时间
         RedisUtils.set(RedisKey.getKey(RedisKey.OPEN_ID_STRING, openid), loginCode, 60, TimeUnit.MINUTES);
         //授权流程,给用户发送授权消息，并且异步通知前端扫码成功,等待授权
-        mqProducer.sendMsg(MQConstant.SCAN_MSG_TOPIC, new ScanSuccessMessageDTO(loginCode));
+        if (mqProducer != null) {
+            mqProducer.sendMsg(MQConstant.SCAN_MSG_TOPIC, new ScanSuccessMessageDTO(loginCode));
+        }
         String skipUrl = String.format(URL, wxMpService.getWxMpConfigStorage().getAppId(), URLEncoder.encode(callback + "/wx/portal/public/callBack"));
         WxMpXmlOutMessage.TEXT().build();
         return new TextBuilder().build("请点击链接授权：<a href=\"" + skipUrl + "\">登录</a>", wxMpXmlMessage, wxMpService);
     }
 
+    /**
+     * 获取事件的key
+     *
+     * @param wxMpXmlMessage
+     * @return
+     */
     private String getEventKey(WxMpXmlMessage wxMpXmlMessage) {
         //扫码关注的渠道事件有前缀，需要去除
         return wxMpXmlMessage.getEventKey().replace("qrscene_", "");
@@ -91,7 +102,9 @@ public class WxMsgService {
         //找到对应的code
         Integer code = RedisUtils.get(RedisKey.getKey(RedisKey.OPEN_ID_STRING, userInfo.getOpenid()), Integer.class);
         //发送登录成功事件
-        mqProducer.sendMsg(MQConstant.LOGIN_MSG_TOPIC, new LoginMessageDTO(user.getId(), code));
+        if (mqProducer != null) {
+            mqProducer.sendMsg(MQConstant.LOGIN_MSG_TOPIC, new LoginMessageDTO(user.getId(), code));
+        }
     }
 
     private void fillUserInfo(Long uid, WxOAuth2UserInfo userInfo) {

@@ -44,6 +44,7 @@ public class ItemConfig implements Serializable {
 
     /**
      * 物品功能描述
+     * 为什么字段名要用反引号括起来？因为describe是SQL的关键字，避免冲突
      */
     @TableField("`describe`")
     private String describe;

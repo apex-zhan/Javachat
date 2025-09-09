@@ -153,21 +153,41 @@ public class UserCache {
         RedisUtils.del(key);
     }
 
+    /**
+     * 缓存黑名单
+     *
+     * @return
+     */
     @Cacheable(cacheNames = "user", key = "'blackList'")
     public Map<Integer, Set<String>> getBlackMap() {
+        //按类型进行分组，获取对应的target
         Map<Integer, List<Black>> collect = blackDao.list().stream().collect(Collectors.groupingBy(Black::getType));
+        //获取对应的target
         Map<Integer, Set<String>> result = new HashMap<>(collect.size());
+        //
         for (Map.Entry<Integer, List<Black>> entry : collect.entrySet()) {
             result.put(entry.getKey(), entry.getValue().stream().map(Black::getTarget).collect(Collectors.toSet()));
         }
         return result;
     }
 
+    /**
+     * 删除黑名单缓存
+     *
+     * @return
+     */
     @CacheEvict(cacheNames = "user", key = "'blackList'")
     public Map<Integer, Set<String>> evictBlackMap() {
         return null;
     }
 
+    /**
+     * 获取用户角色
+     * 使用set进行缓存，避免重复查询，提升性能
+     *
+     * @param uid
+     * @return
+     */
     @Cacheable(cacheNames = "user", key = "'roles'+#uid")
     public Set<Long> getRoleSet(Long uid) {
         List<UserRole> userRoles = userRoleDao.listByUid(uid);

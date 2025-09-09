@@ -5,6 +5,7 @@
 /target/*
 /**/target/
 application-local.properties
+README.md
 
 # git
 *.orig

@@ -22,6 +22,12 @@ public class ApiResult<T> {
     @ApiModelProperty("返回对象")
     private T data;
 
+    /**
+     * 通用成功返回, 不带数据
+     *
+     * @param <T>
+     * @return
+     */
     public static <T> ApiResult<T> success() {
         ApiResult<T> result = new ApiResult<T>();
         result.setData(null);
@@ -29,6 +35,13 @@ public class ApiResult<T> {
         return result;
     }
 
+    /**
+     * 通用成功返回, 带数据
+     *
+     * @param data
+     * @param <T>
+     * @return
+     */
     public static <T> ApiResult<T> success(T data) {
         ApiResult<T> result = new ApiResult<T>();
         result.setData(data);
@@ -44,6 +57,13 @@ public class ApiResult<T> {
         return result;
     }
 
+    /**
+     * 通用失败返回, 使用错误枚举
+     *
+     * @param errorEnum
+     * @param <T>
+     * @return
+     */
     public static <T> ApiResult<T> fail(ErrorEnum errorEnum) {
         ApiResult<T> result = new ApiResult<T>();
         result.setSuccess(Boolean.FALSE);

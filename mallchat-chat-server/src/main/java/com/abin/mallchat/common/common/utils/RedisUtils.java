@@ -17,6 +17,9 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+/**
+ * Description: Redis工具类
+ */
 @Slf4j
 public class RedisUtils {
 
@@ -26,6 +29,9 @@ public class RedisUtils {
         RedisUtils.stringRedisTemplate = SpringUtil.getBean(StringRedisTemplate.class);
     }
 
+    /**
+     * 自增并设置过期时间的lua脚本
+     */
     private static final String LUA_INCR_EXPIRE =
             "local key,ttl=KEYS[1],ARGV[1] \n" +
                     " \n" +
@@ -36,13 +42,23 @@ public class RedisUtils {
                     "  return tonumber(redis.call('INCR',key)) \n" +
                     "end ";
 
+    /**
+     * 自增并设置过期时间的lua脚本
+     *
+     * @param key
+     * @param time
+     * @param unit
+     * @return
+     */
     public static Long inc(String key, int time, TimeUnit unit) {
+        //DefaultRedisScript是封装好的lua脚本执行类
         RedisScript<Long> redisScript = new DefaultRedisScript<>(LUA_INCR_EXPIRE, Long.class);
         return stringRedisTemplate.execute(redisScript, Collections.singletonList(key), String.valueOf(unit.toSeconds(time)));
     }
 
     /**
      * 自增int
+     * 使用到了redis中的lua脚本，保证原子性
      *
      * @param key  键
      * @param time 时间(秒)

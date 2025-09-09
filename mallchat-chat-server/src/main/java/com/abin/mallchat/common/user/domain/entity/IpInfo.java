@@ -28,6 +28,11 @@ public class IpInfo implements Serializable {
     //最新登录的ip详情
     private IpDetail updateIpDetail;
 
+    /**
+     * 刷新ip
+     *
+     * @param ip+
+     */
     public void refreshIp(String ip) {
         if (StringUtils.isEmpty(ip)) {
             return;
@@ -44,10 +49,7 @@ public class IpInfo implements Serializable {
      * @return
      */
     public String needRefreshIp() {
-        boolean notNeedRefresh = Optional.ofNullable(updateIpDetail)
-                .map(IpDetail::getIp)
-                .filter(ip -> Objects.equals(ip, updateIp))
-                .isPresent();
+        boolean notNeedRefresh = Optional.ofNullable(updateIpDetail).map(IpDetail::getIp).filter(ip -> Objects.equals(ip, updateIp)).isPresent();
         return notNeedRefresh ? null : updateIp;
     }
 

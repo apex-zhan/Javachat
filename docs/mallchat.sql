@@ -307,7 +307,6 @@ CREATE TABLE `group_member` (
 DROP TABLE IF EXISTS `contact`;
 
 
-
 CREATE TABLE `contact` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT 'id',
   `uid` bigint(20) NOT NULL COMMENT 'uid',

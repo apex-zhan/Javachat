@@ -63,15 +63,27 @@ public class MessageSendListener {
     private ContactDao contactDao;
     @Autowired
     private HotRoomCache hotRoomCache;
-    @Autowired
+    @Autowired(required = false)
     private MQProducer mqProducer;
 
+    /**
+     * 消息路由
+     *
+     * @param event
+     */
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT, classes = MessageSendEvent.class, fallbackExecution = true)
     public void messageRoute(MessageSendEvent event) {
         Long msgId = event.getMsgId();
-        mqProducer.sendSecureMsg(MQConstant.SEND_MSG_TOPIC, new MsgSendMessageDTO(msgId), msgId);
+        if (mqProducer != null) {
+            mqProducer.sendSecureMsg(MQConstant.SEND_MSG_TOPIC, new MsgSendMessageDTO(msgId), msgId);
+        }
     }
 
+    /**
+     * 处理消息发送后的操作，比如推送等
+     *
+     * @param event
+     */
     @TransactionalEventListener(classes = MessageSendEvent.class, fallbackExecution = true)
     public void handlerMsg(@NotNull MessageSendEvent event) {
         Message message = messageDao.getById(event.getMsgId());
@@ -81,6 +93,12 @@ public class MessageSendListener {
         }
     }
 
+    /**
+     * 是否是热聊房间
+     *
+     * @param room
+     * @return
+     */
     public boolean isHotRoom(Room room) {
         return Objects.equals(HotFlagEnum.YES.getType(), room.getHotFlag());
     }

@@ -1,5 +1,7 @@
 package com.abin.mallchat.common;
 
+import com.abin.mallchat.common.common.config.RedisConfig;
+import com.abin.mallchat.common.common.config.RedissonConfig;
 import org.apache.rocketmq.spring.autoconfigure.RocketMQAutoConfiguration;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;

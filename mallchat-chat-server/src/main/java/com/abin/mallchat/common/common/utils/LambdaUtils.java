@@ -3,6 +3,7 @@ package com.abin.mallchat.common.common.utils;
 import cn.hutool.core.map.WeakConcurrentMap;
 import cn.hutool.core.util.ReflectUtil;
 import cn.hutool.core.util.StrUtil;
+import com.abin.mallchat.common.user.domain.entity.User;
 import com.baomidou.mybatisplus.core.toolkit.support.ColumnCache;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import lombok.SneakyThrows;
@@ -16,12 +17,13 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * Description:
+ * Description: lambda表达式工具类
  * Author: <a href="https://github.com/zongzibinbin">abin</a>
  * Date: 2023-08-02
  */
@@ -107,5 +109,4 @@ public class LambdaUtils {
         return cache.computeIfAbsent(func.getClass().getName(), (key)
                 -> ReflectUtil.invoke(func, "writeReplace"));
     }
-
 }

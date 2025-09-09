@@ -30,6 +30,11 @@ public class UserOfflineListener {
     @Autowired
     private WSAdapter wsAdapter;
 
+    /**
+     * 用户下线，保存redis和推送
+     *
+     * @param event
+     */
     @Async
     @EventListener(classes = UserOfflineEvent.class)
     public void saveRedisAndPush(UserOfflineEvent event) {
@@ -39,6 +44,11 @@ public class UserOfflineListener {
         webSocketService.sendToAllOnline(wsAdapter.buildOfflineNotifyResp(event.getUser()), event.getUser().getId());
     }
 
+    /**
+     * 用户下线，保存数据库
+     *
+     * @param event
+     */
     @Async
     @EventListener(classes = UserOfflineEvent.class)
     public void saveDB(UserOfflineEvent event) {

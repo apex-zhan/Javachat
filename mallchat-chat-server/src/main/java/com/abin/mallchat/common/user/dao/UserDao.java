@@ -27,6 +27,12 @@ import java.util.List;
 @Service
 public class UserDao extends ServiceImpl<UserMapper, User> {
 
+    /**
+     * 通过openId获取用户
+     *
+     * @param openId
+     * @return
+     */
     public User getByOpenId(String openId) {
         LambdaQueryWrapper<User> wrapper = new QueryWrapper<User>().lambda().eq(User::getOpenId, openId);
         return getOne(wrapper);
@@ -79,6 +85,14 @@ public class UserDao extends ServiceImpl<UserMapper, User> {
                 .count();
     }
 
+    /**
+     * 获取在线用户列表
+     *
+     * @param memberUidList
+     * @param request
+     * @param online
+     * @return
+     */
     public CursorPageBaseResp<User> getCursorPage(List<Long> memberUidList, CursorPageBaseReq request, ChatActiveStatusEnum online) {
         return CursorUtils.getCursorPageByMysql(this, request, wrapper -> {
             wrapper.eq(User::getActiveStatus, online.getStatus());//筛选上线或者离线的

@@ -25,7 +25,15 @@ import java.util.stream.Collectors;
  * Date: 2023-03-28
  */
 public class CursorUtils {
-
+    /**
+     * 通过Redis的ZSet获取游标分页数据
+     *
+     * @param cursorPageBaseReq
+     * @param redisKey
+     * @param typeConvert
+     * @param <T>
+     * @return
+     */
     public static <T> CursorPageBaseResp<Pair<T, Double>> getCursorPageByRedis(CursorPageBaseReq cursorPageBaseReq, String redisKey, Function<String, T> typeConvert) {
         Set<ZSetOperations.TypedTuple<String>> typedTuples;
         if (StrUtil.isBlank(cursorPageBaseReq.getCursor())) {//第一次

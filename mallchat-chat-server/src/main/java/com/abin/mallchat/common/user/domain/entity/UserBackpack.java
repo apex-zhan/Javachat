@@ -15,6 +15,11 @@ import java.util.Date;
  * </p>
  *
  * @author <a href="https://github.com/zongzibinbin">abin</a>
+ * @Data // 生成getter、setter、toString等方法
+ * @EqualsAndHashCode(callSuper = false) // 重写equals和hashCode方法，callSuper = false表示不调用父类的equals和hashCode方法
+ * @Builder // 生成建造者模式，可以通过链式调用来创建对象
+ * @AllArgsConstructor // 生成包含所有字段的构造器
+ * @NoArgsConstructor // 生成无参构造器
  * @since 2023-03-19
  */
 @Data
@@ -34,7 +39,7 @@ public class UserBackpack implements Serializable {
     private Long id;
 
     /**
-     * uid
+     * uid, 用户id
      */
     @TableField("uid")
     private Long uid;

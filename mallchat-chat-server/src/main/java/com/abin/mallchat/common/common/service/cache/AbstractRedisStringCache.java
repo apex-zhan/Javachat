@@ -9,9 +9,9 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Description: redis string类型的批量缓存框架
- * Author: <a href="https://github.com/zongzibinbin">abin</a>
- * Date: 2023-06-10
+ * Description: redis 的批量缓存框架，使用的是旁路缓存模式
+ * Author: zxw
+ * Date: 2025-9-9
  */
 public abstract class AbstractRedisStringCache<IN, OUT> implements BatchCache<IN, OUT> {
 
@@ -33,6 +33,11 @@ public abstract class AbstractRedisStringCache<IN, OUT> implements BatchCache<IN
         return getBatch(Collections.singletonList(req)).get(req);
     }
 
+    /**
+     *
+     * @param req
+     * @return
+     */
     @Override
     public Map<IN, OUT> getBatch(List<IN> req) {
         if (CollectionUtil.isEmpty(req)) {//防御性编程

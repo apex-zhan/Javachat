@@ -54,6 +54,16 @@ public class CursorUtils {
         return new CursorPageBaseResp<>(cursor, isLast, result);
     }
 
+    /**
+     * 通过mysql获取游标分页数据
+     *
+     * @param mapper       mapper
+     * @param request      分页参数
+     * @param initWrapper  初始化wrapper
+     * @param cursorColumn 游标字段
+     * @param <T>          实体类型
+     * @return
+     */
     public static <T> CursorPageBaseResp<T> getCursorPageByMysql(IService<T> mapper, CursorPageBaseReq request, Consumer<LambdaQueryWrapper<T>> initWrapper, SFunction<T, ?> cursorColumn) {
         //游标字段类型
         Class<?> cursorType = LambdaUtils.getReturnType(cursorColumn);
@@ -62,6 +72,7 @@ public class CursorUtils {
         initWrapper.accept(wrapper);
         //游标条件
         if (StrUtil.isNotBlank(request.getCursor())) {
+            //lt是小于
             wrapper.lt(cursorColumn, parseCursor(request.getCursor(), cursorType));
         }
         //游标方向

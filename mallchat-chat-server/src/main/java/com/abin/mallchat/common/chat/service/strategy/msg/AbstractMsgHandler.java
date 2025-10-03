@@ -25,8 +25,10 @@ public abstract class AbstractMsgHandler<Req> {
 
     @PostConstruct
     private void init() {
+        //通过反射获取泛型类型
         ParameterizedType genericSuperclass = (ParameterizedType) this.getClass().getGenericSuperclass();
         this.bodyClass = (Class<Req>) genericSuperclass.getActualTypeArguments()[0];
+        //自动注册到工厂
         MsgHandlerFactory.register(getMsgTypeEnum().getType(), this);
     }
 

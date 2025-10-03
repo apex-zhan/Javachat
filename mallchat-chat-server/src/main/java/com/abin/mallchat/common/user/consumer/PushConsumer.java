@@ -11,7 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * Description:
+ * Description: 广播模式消费者
  * Author: <a href="https://github.com/zongzibinbin">abin</a>
  * Date: 2023-08-12
  */
@@ -21,6 +21,11 @@ public class PushConsumer implements RocketMQListener<PushMessageDTO> {
     @Autowired
     private WebSocketService webSocketService;
 
+    /**
+     * 将websocket消息推送到指定用户或者所有在线用户
+     *
+     * @param message
+     */
     @Override
     public void onMessage(PushMessageDTO message) {
         WSPushTypeEnum wsPushTypeEnum = WSPushTypeEnum.of(message.getPushType());

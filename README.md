@@ -178,9 +178,34 @@ https://github.com/Evansy/MallChatWeb
   </tr>
 </table>
 
+
+### 项目中用到的spring全家桶技术：
+1. spring Boot核心
+2. spring Web Mvc
+3. spring Aop
+4. spring Data
+5. spring Cache(缓存抽象)
+6. spring Events
+7. spring Async(异步)
+8. spring Transaction
+9. spring Validation(数据校验)
+10. spring Coniguration(配置管理)
+11. spring Scheduling
+12. spring WebSocket
+13. spring Integration(消息集成)
+14. spring Security
+15. spring BootActuator
+16. spring Test
+
+
+###  一些项目细节
+
+![项目中的一些面试问题.png](项目中的一些面试问题.png "项目中的一些面试问题")
+
+
+
+
+
 ## License
 
 [Apache License 2.0](./LICENSE)
-
-## 一些项目细节
-![img.png](img.png)

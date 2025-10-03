@@ -23,6 +23,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class RedisUtils {
 
+    // RedisTemplate是spring-data-redis提供的操作redis的模板类
     private static StringRedisTemplate stringRedisTemplate;
 
     static {
@@ -278,6 +279,14 @@ public class RedisUtils {
         return toBeanOrNull(s, tClass);
     }
 
+    /**
+     * 批量获取
+     *
+     * @param keys
+     * @param tClass
+     * @param <T>
+     * @return
+     */
     public static <T> List<T> mget(Collection<String> keys, Class<T> tClass) {
         List<String> list = stringRedisTemplate.opsForValue().multiGet(keys);
         if (Objects.isNull(list)) {

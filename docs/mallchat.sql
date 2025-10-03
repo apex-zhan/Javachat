@@ -35,7 +35,7 @@ INSERT INTO `item_config` VALUES (6, 2, 'https://minio.mallchat.cn/mallchat/%E8%
 -- ----------------------------
 DROP TABLE IF EXISTS `message`;
 CREATE TABLE `message`  (
-  `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'id',
+  `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'id',   # 消息id，全局唯一自增
   `room_id` bigint(20) NOT NULL COMMENT '会话表id',
   `from_uid` bigint(20) NOT NULL COMMENT '消息发送者uid',
   `content` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '消息内容',

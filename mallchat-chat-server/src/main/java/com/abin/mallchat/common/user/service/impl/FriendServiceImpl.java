@@ -199,6 +199,13 @@ public class FriendServiceImpl implements FriendService {
         roomService.disableFriendRoom(Arrays.asList(uid, friendUid));
     }
 
+    /**
+     * 好友列表
+     *
+     * @param uid
+     * @param request
+     * @return
+     */
     @Override
     public CursorPageBaseResp<FriendResp> friendList(Long uid, CursorPageBaseReq request) {
         CursorPageBaseResp<UserFriend> friendPage = userFriendDao.getFriendPage(uid, request);

@@ -9,7 +9,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Description:
+ * Description: 推送类型枚举
  * Author: <a href="https://github.com/zongzibinbin">abin</a>
  * Date: 2023-07-29
  */

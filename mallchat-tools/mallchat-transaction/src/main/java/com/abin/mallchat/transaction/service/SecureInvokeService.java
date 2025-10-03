@@ -37,12 +37,23 @@ public class SecureInvokeService {
 
     private final Executor executor;
 
+    /**
+     * 每五秒全表扫描
+     */
     @Scheduled(cron = "*/5 * * * * ?")
     public void retry() {
         List<SecureInvokeRecord> secureInvokeRecords = secureInvokeRecordDao.getWaitRetryRecords();
         for (SecureInvokeRecord secureInvokeRecord : secureInvokeRecords) {
             doAsyncInvoke(secureInvokeRecord);
         }
+    }
+
+    /**
+     * 按时间片扫描重试。避免全表扫描 TODO
+     */
+    @Scheduled(fixedDelay = 10000)
+    public void retryByTimeSlice(){
+
     }
 
     public void save(SecureInvokeRecord record) {
@@ -63,6 +74,12 @@ public class SecureInvokeService {
         secureInvokeRecordDao.updateById(update);
     }
 
+    /**
+     * 指数退避重试策略
+     *
+     * @param retryTimes
+     * @return
+     */
     private Date getNextRetryTime(Integer retryTimes) {//或者可以采用退避算法
         double waitMinutes = Math.pow(RETRY_INTERVAL_MINUTES, retryTimes);//重试时间指数上升 2m 4m 8m 16m
         return DateUtil.offsetMinute(new Date(), (int) waitMinutes);

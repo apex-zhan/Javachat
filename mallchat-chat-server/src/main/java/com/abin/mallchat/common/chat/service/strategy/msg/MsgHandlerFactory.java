@@ -12,12 +12,13 @@ import java.util.Map;
  * Date: 2023-06-04
  */
 public class MsgHandlerFactory {
+    //Map中的key为消息类型，value为对应的消息处理器
     private static final Map<Integer, AbstractMsgHandler> STRATEGY_MAP = new HashMap<>();
 
     /**
      * 用于注册和管理不同类型的消息处理器
      *
-     * @param code
+     * @param code 这里的code指的是消息类型
      * @param strategy
      */
     public static void register(Integer code, AbstractMsgHandler strategy) {

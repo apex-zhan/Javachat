@@ -18,7 +18,11 @@ public class InterceptorConfig implements WebMvcConfigurer {
     @Autowired
     private CollectorInterceptor collectorInterceptor;
 
-
+    /**
+     * 添加拦截器
+     *
+     * @param registry
+     */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(tokenInterceptor)

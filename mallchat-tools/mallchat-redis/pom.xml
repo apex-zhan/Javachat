@@ -11,5 +11,10 @@
 
     <artifactId>mallchat-redis</artifactId>
 
-
+    <dependencies>
+        <dependency>
+            <groupId>com.abin.mallchat</groupId>
+            <artifactId>mallchat-common-starter</artifactId>
+        </dependency>
+    </dependencies>
 </project>

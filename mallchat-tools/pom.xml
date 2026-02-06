@@ -17,6 +17,7 @@
         <module>mallchat-common-starter</module>
         <module>mallchat-frequency-control</module>
         <module>mallchat-oss-starter</module>
+        <module>mallchat-cache-starter</module>
     </modules>
 
 

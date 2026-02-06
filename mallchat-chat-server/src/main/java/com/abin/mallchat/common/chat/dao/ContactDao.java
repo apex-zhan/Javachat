@@ -27,6 +27,13 @@ import java.util.List;
 @Service
 public class ContactDao extends ServiceImpl<ContactMapper, Contact> {
 
+    /**
+     * 获取会话
+     *
+     * @param uid
+     * @param roomId
+     * @return
+     */
     public Contact get(Long uid, Long roomId) {
         return lambdaQuery()
                 .eq(Contact::getUid, uid)
@@ -34,6 +41,12 @@ public class ContactDao extends ServiceImpl<ContactMapper, Contact> {
                 .one();
     }
 
+    /**
+     * 统计已读人数
+     * 
+     * @param message
+     * @return
+     */
     public Integer getReadCount(Message message) {
         return lambdaQuery()
                 .eq(Contact::getRoomId, message.getRoomId())

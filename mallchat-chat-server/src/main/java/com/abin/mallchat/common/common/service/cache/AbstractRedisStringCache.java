@@ -14,11 +14,15 @@ import java.util.stream.Collectors;
  * Date: 2025-9-9
  */
 public abstract class AbstractRedisStringCache<IN, OUT> implements BatchCache<IN, OUT> {
-
+    /**
+     * 返回值类型
+     */
     private Class<OUT> outClass;
 
     protected AbstractRedisStringCache() {
+        // 获取父类的泛型参数：AbstractRedisStringCache<Long, User>
         ParameterizedType genericSuperclass = (ParameterizedType) this.getClass().getGenericSuperclass();
+        // 获取第2个泛型参数 OUT 的实际类型（User.class）
         this.outClass = (Class<OUT>) genericSuperclass.getActualTypeArguments()[1];
     }
 
@@ -34,6 +38,12 @@ public abstract class AbstractRedisStringCache<IN, OUT> implements BatchCache<IN
     }
 
     /**
+     * 批量获取缓存
+     * 1. 输入去重优化
+     * 2. 批量get查询redis缓存
+     * 3. 批量查询未命中的差集
+     * 4. 批量加载数据库并回写redis
+     * 5. 合并缓存和数据库的结果
      *
      * @param req
      * @return
@@ -61,6 +71,8 @@ public abstract class AbstractRedisStringCache<IN, OUT> implements BatchCache<IN
         if (CollectionUtil.isNotEmpty(loadReqs)) {
             //批量load
             load = load(loadReqs);
+            //entrySet() 方法返回映射中包含的映射的 Set 视图。 每个元素都是一个 Map.Entry 对象，表示映射中的一个键值对。
+            //Pair.of() 方法用于创建一个包含两个元素的 Pair 对象。
             Map<String, OUT> loadMap = load.entrySet().stream()
                     .map(a -> Pair.of(getKey(a.getKey()), a.getValue()))
                     .collect(Collectors.toMap(Pair::getFirst, Pair::getSecond));

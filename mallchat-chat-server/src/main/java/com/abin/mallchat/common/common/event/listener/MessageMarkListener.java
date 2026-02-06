@@ -10,6 +10,7 @@ import com.abin.mallchat.common.common.domain.enums.IdempotentEnum;
 import com.abin.mallchat.common.common.event.MessageMarkEvent;
 import com.abin.mallchat.common.user.domain.enums.ItemEnum;
 import com.abin.mallchat.common.user.service.IUserBackpackService;
+import com.abin.mallchat.common.user.service.WebSocketService;
 import com.abin.mallchat.common.user.service.adapter.WSAdapter;
 import com.abin.mallchat.common.user.service.impl.PushService;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +37,8 @@ public class MessageMarkListener {
     private IUserBackpackService iUserBackpackService;
     @Autowired
     private PushService pushService;
+    @Autowired
+    private WebSocketService webSocketService;
 
     @Async
     @TransactionalEventListener(classes = MessageMarkEvent.class, fallbackExecution = true)
@@ -62,6 +65,7 @@ public class MessageMarkListener {
         ChatMessageMarkDTO dto = event.getDto();
         Integer markCount = messageMarkDao.getMarkCount(dto.getMsgId(), dto.getMarkType());
         pushService.sendPushMsg(WSAdapter.buildMsgMarkSend(dto, markCount));
+//        webSocketService.sendToAllOnline(WSAdapter.buildMsgMarkSend(dto, markCount), dto.getUid());
     }
 
 }

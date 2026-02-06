@@ -318,7 +318,7 @@ CREATE TABLE `contact` (
   `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '修改时间',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE KEY `uniq_uid_room_id` (`uid`,`room_id`) USING BTREE,
-  KEY `idx_room_id_read_time` (`room_id`,`read_time`) USING BTREE,
+  KEY `idx_room_id_read_time` (`room_id`,`read_time`) USING BTREE, #按房间和阅读时间查询，用于未读消息计算
   KEY `idx_create_time` (`create_time`) USING BTREE,
   KEY `idx_update_time` (`update_time`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='会话列表';

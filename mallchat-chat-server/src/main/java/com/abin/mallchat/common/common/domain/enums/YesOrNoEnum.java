@@ -26,6 +26,7 @@ public enum YesOrNoEnum {
     private static Map<Integer, YesOrNoEnum> cache;
 
     static {
+        //
         cache = Arrays.stream(YesOrNoEnum.values()).collect(Collectors.toMap(YesOrNoEnum::getStatus, Function.identity()));
     }
 

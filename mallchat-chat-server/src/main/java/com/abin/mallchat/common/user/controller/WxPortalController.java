@@ -74,10 +74,8 @@ public class WxPortalController {
         } catch (Exception e) {
             log.error("callBack error", e);
         }
-        // 重定向到前端页面
         RedirectView redirectView = new RedirectView();
-        // 跳转回前端
-        redirectView.setUrl("http://127.0.0.1:9988");
+        redirectView.setUrl("http://localhost:9988");
         return redirectView;
     }
 

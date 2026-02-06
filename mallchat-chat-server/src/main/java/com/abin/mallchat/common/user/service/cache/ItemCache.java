@@ -2,6 +2,8 @@ package com.abin.mallchat.common.user.service.cache;
 
 import com.abin.mallchat.common.user.dao.ItemConfigDao;
 import com.abin.mallchat.common.user.domain.entity.ItemConfig;
+import com.alicp.jetcache.anno.CacheType;
+import com.alicp.jetcache.anno.Cached;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Component;
@@ -25,7 +27,14 @@ public class ItemCache {//todo 多级缓存
      * @param type
      * @return
      */
-    @Cacheable(cacheNames = "item", key = "'itemsByType:'+#type")
+//    @Cacheable(cacheNames = "item", key = "'itemsByType:'+#type")
+    @Cached(
+            name = "item:byType",
+            key = "'itemsByType:'+#type",
+            expire = 3600,
+            cacheType = CacheType.BOTH,
+            localExpire =  300
+    )
     public List<ItemConfig> getByType(Integer type) {
         return itemConfigDao.getByType(type);
     }

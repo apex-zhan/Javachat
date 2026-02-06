@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+    方案 2：保持 Spring Boot 2.x，使用 LangChain4j
+    需要：Java 8+, Spring Boot 2.x
+    优点：无需升级 Spring Boot，快速上线
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    
+    <parent>
+        <groupId>com.abin.mallchat</groupId>
+        <artifactId>mallchat</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mallchat-ai</artifactId>
+    <packaging>pom</packaging>
+    <version>1.0-SNAPSHOT</version>
+    
+    <modules>
+        <module>mallchat-ai-common</module>
+        <module>mallchat-ai-assistant</module>
+        <module>mallchat-ai-rag</module>
+        <module>mallchat-ai-llm</module>
+        <module>mallchat-ai-vector</module>
+    </modules>
+
+    <properties>
+        <!-- 使用 LangChain4j 替代 Spring AI -->
+        <langchain4j.version>0.27.1</langchain4j.version>
+        <milvus-sdk.version>2.3.4</milvus-sdk.version>
+        <tika.version>2.9.1</tika.version>
+        <jqwik.version>1.7.4</jqwik.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- LangChain4j Core -->
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j</artifactId>
+                <version>${langchain4j.version}</version>
+            </dependency>
+            
+            <!-- LangChain4j OpenAI -->
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-open-ai</artifactId>
+                <version>${langchain4j.version}</version>
+            </dependency>
+            
+            <!-- LangChain4j Spring Boot Starter -->
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-spring-boot-starter</artifactId>
+                <version>${langchain4j.version}</version>
+            </dependency>
+            
+            <!-- LangChain4j Embeddings -->
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-embeddings</artifactId>
+                <version>${langchain4j.version}</version>
+            </dependency>
+
+            <!-- Milvus Vector Database -->
+            <dependency>
+                <groupId>io.milvus</groupId>
+                <artifactId>milvus-sdk-java</artifactId>
+                <version>${milvus-sdk.version}</version>
+            </dependency>
+            
+            <!-- Apache Tika for document parsing -->
+            <dependency>
+                <groupId>org.apache.tika</groupId>
+                <artifactId>tika-core</artifactId>
+                <version>${tika.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tika</groupId>
+                <artifactId>tika-parsers-standard-package</artifactId>
+                <version>${tika.version}</version>
+            </dependency>
+            
+            <!-- jqwik for property-based testing -->
+            <dependency>
+                <groupId>net.jqwik</groupId>
+                <artifactId>jqwik</artifactId>
+                <version>${jqwik.version}</version>
+                <scope>test</scope>
+            </dependency>
+            
+            <!-- AI Module Dependencies -->
+            <dependency>
+                <groupId>com.abin.mallchat</groupId>
+                <artifactId>mallchat-ai-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.abin.mallchat</groupId>
+                <artifactId>mallchat-ai-llm</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.abin.mallchat</groupId>
+                <artifactId>mallchat-ai-vector</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.abin.mallchat</groupId>
+                <artifactId>mallchat-ai-rag</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.abin.mallchat</groupId>
+                <artifactId>mallchat-ai-assistant</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+</project>

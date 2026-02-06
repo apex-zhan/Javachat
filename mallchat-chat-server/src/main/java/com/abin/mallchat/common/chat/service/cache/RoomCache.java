@@ -6,6 +6,8 @@ import com.abin.mallchat.common.chat.domain.entity.Room;
 import com.abin.mallchat.common.common.constant.RedisKey;
 import com.abin.mallchat.common.common.service.cache.AbstractRedisStringCache;
 import com.abin.mallchat.common.user.dao.UserDao;
+import com.abin.mallchat.singleflight.SingleFlight;
+import com.alicp.jetcache.anno.Cached;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -27,6 +29,8 @@ public class RoomCache extends AbstractRedisStringCache<Long, Room> {
     private RoomDao roomDao;
     @Autowired
     private RoomFriendDao roomFriendDao;
+    @Autowired
+    private SingleFlight singleFlight;
 
     @Override
     protected String getKey(Long roomId) {

@@ -50,6 +50,13 @@ public class WebSocketIoHandler extends SimpleChannelInboundHandler<Object> {
         log.warn("WebSocket链路与服务器连接已断开.");
     }
 
+    /**
+     * 用于 WebSocket 客户端的消息处理
+     * 
+     * @param ctx
+     * @param msg
+     * @throws Exception
+     */
     @Override
     public void channelRead0(ChannelHandlerContext ctx, Object msg) throws Exception {
         Channel ch = ctx.channel();

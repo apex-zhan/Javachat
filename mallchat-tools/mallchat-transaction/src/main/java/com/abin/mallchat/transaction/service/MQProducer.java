@@ -28,9 +28,12 @@ public class MQProducer {
                 log.info("MQ消息发送成功 - topic: {}, body: {}", topic, body);
             } else {
                 log.warn("RocketMQTemplate 不可用，跳过消息发送 - topic: {}, body: {}", topic, body);
+                throw new RuntimeException("RocketMQTemplate is null");
             }
         } catch (Exception e) {
             log.error("MQ消息发送失败 - topic: {}, body: {}, error: {}", topic, body, e.getMessage());
+            // 重新抛出异常，让上层能够捕获并执行降级方案
+            throw e;
         }
     }
 
@@ -52,9 +55,12 @@ public class MQProducer {
                 log.info("MQ可靠消息发送成功 - topic: {}, body: {}, key: {}", topic, body, key);
             } else {
                 log.warn("RocketMQTemplate 不可用，跳过可靠消息发送 - topic: {}, body: {}, key: {}", topic, body, key);
+                throw new RuntimeException("RocketMQTemplate is null");
             }
         } catch (Exception e) {
             log.error("MQ可靠消息发送失败 - topic: {}, body: {}, key: {}, error: {}", topic, body, key, e.getMessage());
+            // 重新抛出异常，让上层能够捕获
+            throw e;
         }
     }
 }

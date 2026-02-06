@@ -29,6 +29,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import static com.sun.org.apache.xalan.internal.xsltc.compiler.util.Util.println;
+
 /**
  * Description: 普通文本消息
  * Author: <a href="https://github.com/zongzibinbin">abin</a>
@@ -123,6 +125,7 @@ public class TextMsgHandler extends AbstractMsgHandler<TextMsgReq> {
             replyMsgVO.setBody(MsgHandlerFactory.getStrategyNoNull(replyMessage.getType()).showReplyMsg(replyMessage));
             User replyUser = userCache.getUserInfo(replyMessage.getFromUid());
             replyMsgVO.setUsername(replyUser.getName());
+            //是否可以撤回，只有间隔消息数小于等于指定值时，才允许撤回
             replyMsgVO.setCanCallback(YesOrNoEnum.toStatus(Objects.nonNull(msg.getGapCount()) && msg.getGapCount() <= MessageAdapter.CAN_CALLBACK_GAP_COUNT));
             replyMsgVO.setGapCount(msg.getGapCount());
             resp.setReply(replyMsgVO);

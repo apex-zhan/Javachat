@@ -9,7 +9,7 @@ import com.abin.mallchat.common.common.domain.dto.RequestInfo;
  */
 public class RequestHolder {
 
-    //
+    //RequestInfo的作用是存储当前请求的uid和ip
     private static final ThreadLocal<RequestInfo> threadLocal = new ThreadLocal<>();
 
     public static void set(RequestInfo requestInfo) {

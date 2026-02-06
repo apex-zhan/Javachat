@@ -8,13 +8,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
 
 import javax.annotation.PostConstruct;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
  * 抽象类频控服务 其他类如果要实现限流服务 直接注入使用通用限流类 后期会通过继承此类实现令牌桶等算法
+ * 模板方法（先检查 reachRateLimit，再执行 supplier，finally 增加统计）
  *
  * @param <K>
  */
@@ -37,7 +36,7 @@ public abstract class AbstractFrequencyControlService<K extends FrequencyControl
             throw new FrequencyControlException(CommonErrorEnum.FREQUENCY_LIMIT);
         }
         try {
-            return supplier.get();
+            return supplier.get(); //执行业务方法
         } finally {
             //不管成功还是失败，都增加次数
             addFrequencyControlStatisticsCount(frequencyControlMap);
@@ -73,7 +72,11 @@ public abstract class AbstractFrequencyControlService<K extends FrequencyControl
         return executeWithFrequencyControlList(Collections.singletonList(frequencyControl), supplier);
     }
 
-
+    /**
+     * 代表一个带返回值且可能抛出异常的供应商
+     *
+     * @param <T>
+     */
     @FunctionalInterface
     public interface SupplierThrowWithoutParam<T> {
 

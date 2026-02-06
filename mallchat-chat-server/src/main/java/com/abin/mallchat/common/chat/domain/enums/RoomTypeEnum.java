@@ -29,6 +29,12 @@ public enum RoomTypeEnum {
         cache = Arrays.stream(RoomTypeEnum.values()).collect(Collectors.toMap(RoomTypeEnum::getType, Function.identity()));
     }
 
+    /**
+     * 根据type获取枚举，不存在则返回null
+     *
+     * @param type
+     * @return
+     */
     public static RoomTypeEnum of(Integer type) {
         return cache.get(type);
     }

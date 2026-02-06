@@ -42,6 +42,7 @@ public class BlackInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         //得到黑名单map
         Map<Integer, Set<String>> blackMap = userCache.getBlackMap();
+        //判断是否在黑名单中
         RequestInfo requestInfo = RequestHolder.get();
         if (inBlackList(requestInfo.getUid(), blackMap.get(BlackTypeEnum.UID.getType()))) {
             HttpErrorEnum.ACCESS_DENIED.sendHttpError(response);

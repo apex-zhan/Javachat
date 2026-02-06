@@ -31,6 +31,7 @@ public enum ItemEnum {
     private static Map<Long, ItemEnum> cache;
 
     static {
+        //
         cache = Arrays.stream(ItemEnum.values()).collect(Collectors.toMap(ItemEnum::getId, Function.identity()));
     }
 

@@ -105,6 +105,7 @@ public class FriendServiceImpl implements FriendService {
     public void apply(Long uid, FriendApplyReq request) {
         //是否有好友关系
         UserFriend friend = userFriendDao.getByFriend(uid, request.getTargetUid());
+        //断言好友光系是空的（即还不是好友），如果断言失败（实际上已经是好友了）
         AssertUtil.isEmpty(friend, "你们已经是好友了");
         //是否有待审批的申请记录(自己的)
         UserApply selfApproving = userApplyDao.getFriendApproving(uid, request.getTargetUid());
@@ -121,7 +122,7 @@ public class FriendServiceImpl implements FriendService {
         //申请入库
         UserApply insert = FriendAdapter.buildFriendApply(uid, request);
         userApplyDao.save(insert);
-        //申请事件
+        //申请事件，触发好友申请事件
         applicationEventPublisher.publishEvent(new UserApplyEvent(this, insert));
     }
 

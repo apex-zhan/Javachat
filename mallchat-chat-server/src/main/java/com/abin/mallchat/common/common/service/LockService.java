@@ -43,6 +43,7 @@ public class LockService {
         try {
             return supplier.get();//执行锁内的代码逻辑
         } finally {
+            //释放锁
             if (lock.isLocked() && lock.isHeldByCurrentThread()) {
                 lock.unlock();
             }
@@ -77,6 +78,11 @@ public class LockService {
         return executeWithLock(key, -1, TimeUnit.MILLISECONDS, supplier);
     }
 
+    /**
+     * 带异常的锁执行
+     *
+     * @param <T>
+     */
     @FunctionalInterface
     public interface SupplierThrow<T> {
 

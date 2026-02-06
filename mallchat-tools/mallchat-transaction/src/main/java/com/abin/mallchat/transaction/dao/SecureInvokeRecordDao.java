@@ -12,7 +12,8 @@ import java.util.Date;
 import java.util.List;
 
 /**
- * Description:
+ * Description: 查询：下次重试时间 <= 当前时间
+ * ✅ 高效：利用索引查询
  * Author: <a href="https://github.com/zongzibinbin">abin</a>
  * Date: 2023-08-06
  */

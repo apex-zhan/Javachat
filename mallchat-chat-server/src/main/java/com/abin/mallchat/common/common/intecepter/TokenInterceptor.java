@@ -33,7 +33,8 @@ public class TokenInterceptor implements HandlerInterceptor {
     protected String activeProfile;
 
     /**
-     * 拦截器的前置处理方法，用于验证用户登录状态
+     * 1.拦截器的前置处理方法，用于验证用户登录状态
+     * 2.确保每次请求的缓存一致性
      *
      * @param request
      * @param response
@@ -45,15 +46,15 @@ public class TokenInterceptor implements HandlerInterceptor {
 
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         // 开发和本地环境直接放行
-        if ("dev".equals(activeProfile) || "local".equals(activeProfile)) {
-            // 设置一个默认的测试用户ID
-            request.setAttribute(ATTRIBUTE_UID, 1L); // 1 是测试用户ID
-            MDC.put(MDCKey.UID, "1");
-            return true;
-        }
+//        if ("dev".equals(activeProfile) || "local".equals(activeProfile)) {
+//            // 设置一个默认的测试用户ID
+//            request.setAttribute(ATTRIBUTE_UID, 1L); // 1 是测试用户ID
+//            MDC.put(MDCKey.UID, "1");
+//            return true;
+//        }
         //获取用户登录token
         String token = getToken(request);
-        Long validUid = loginService.getValidUid(token);
+        Long validUid = loginService.getValidUid(token); //验证token缓存有效性
         if (Objects.nonNull(validUid)) {//有登录态
             request.setAttribute(ATTRIBUTE_UID, validUid);
         } else {

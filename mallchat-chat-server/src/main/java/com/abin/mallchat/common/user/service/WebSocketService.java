@@ -61,6 +61,12 @@ public interface WebSocketService {
      */
     void sendToAllOnline(WSBaseResp<?> wsBaseResp);
 
+    /**
+     * 推动消息给指定的人
+     *
+     * @param wsBaseResp 发送的消息体
+     * @param uid        需要推送的人
+     */
     void sendToUid(WSBaseResp<?> wsBaseResp, Long uid);
 
 }

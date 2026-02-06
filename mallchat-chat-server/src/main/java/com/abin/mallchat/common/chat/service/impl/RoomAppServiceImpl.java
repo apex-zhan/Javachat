@@ -392,6 +392,7 @@ public class RoomAppServiceImpl implements RoomAppService {
             roomBaseInfo.setRoomId(room.getId());
             roomBaseInfo.setType(room.getType());
             roomBaseInfo.setHotFlag(room.getHotFlag());
+            //todo 将LastMsgId初始化为0，防止null。为了实现有序排序
             roomBaseInfo.setLastMsgId(room.getLastMsgId());
             roomBaseInfo.setActiveTime(room.getActiveTime());
             if (RoomTypeEnum.of(room.getType()) == RoomTypeEnum.GROUP) {

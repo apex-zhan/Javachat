@@ -8,6 +8,7 @@ import javax.annotation.Nullable;
 import java.util.Map;
 
 /**
+ * URL解析接口
  * @author zhaoqichao
  * @date 2023/7/3 16:34
  */

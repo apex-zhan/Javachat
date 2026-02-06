@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+    方案 1：升级到 Spring Boot 3.x 使用 Spring AI
+    需要：Java 17+, Spring Boot 3.2+
+    优点：使用最新的 Spring AI，功能完善
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    
+    <parent>
+        <groupId>com.abin.mallchat</groupId>
+        <artifactId>mallchat</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mallchat-ai</artifactId>
+    <packaging>pom</packaging>
+    <version>1.0-SNAPSHOT</version>
+    
+    <modules>
+        <module>mallchat-ai-common</module>
+        <module>mallchat-ai-assistant</module>
+        <module>mallchat-ai-rag</module>
+        <module>mallchat-ai-llm</module>
+        <module>mallchat-ai-vector</module>
+    </modules>
+
+    <properties>
+        <!-- 使用 Spring AI BOM 管理版本 -->
+        <spring-ai.version>1.0.0-M4</spring-ai.version>
+        <milvus-sdk.version>2.3.4</milvus-sdk.version>
+        <tika.version>2.9.1</tika.version>
+        <jqwik.version>1.7.4</jqwik.version>
+    </properties>
+    
+    <repositories>
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Spring AI BOM - 统一管理所有 Spring AI 依赖版本 -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Spring AI OpenAI - 版本由 BOM 管理 -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-openai-spring-boot-starter</artifactId>
+            </dependency>
+
+            <!-- Milvus Vector Database -->
+            <dependency>
+                <groupId>io.milvus</groupId>
+                <artifactId>milvus-sdk-java</artifactId>
+                <version>${milvus-sdk.version}</version>
+            </dependency>
+            
+            <!-- Apache Tika for document parsing -->
+            <dependency>
+                <groupId>org.apache.tika</groupId>
+                <artifactId>tika-core</artifactId>
+                <version>${tika.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tika</groupId>
+                <artifactId>tika-parsers-standard-package</artifactId>
+                <version>${tika.version}</version>
+            </dependency>
+            
+            <!-- jqwik for property-based testing -->
+            <dependency>
+                <groupId>net.jqwik</groupId>
+                <artifactId>jqwik</artifactId>
+                <version>${jqwik.version}</version>
+                <scope>test</scope>
+            </dependency>
+            
+            <!-- AI Module Dependencies -->
+            <dependency>
+                <groupId>com.abin.mallchat</groupId>
+                <artifactId>mallchat-ai-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.abin.mallchat</groupId>
+                <artifactId>mallchat-ai-llm</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.abin.mallchat</groupId>
+                <artifactId>mallchat-ai-vector</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.abin.mallchat</groupId>
+                <artifactId>mallchat-ai-rag</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.abin.mallchat</groupId>
+                <artifactId>mallchat-ai-assistant</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+</project>

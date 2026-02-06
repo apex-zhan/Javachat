@@ -38,6 +38,12 @@ public class ContactController {
     @Autowired
     private RoomAppService roomService;
 
+    /**
+     * 会话列表
+     *
+     * @param request
+     * @return
+     */
     @GetMapping("/public/contact/page")
     @ApiOperation("会话列表")
     public ApiResult<CursorPageBaseResp<ChatRoomResp>> getRoomPage(@Valid CursorPageBaseReq request) {
@@ -45,6 +51,12 @@ public class ContactController {
         return ApiResult.success(roomService.getContactPage(request, uid));
     }
 
+    /**
+     * 会话详情
+     *
+     * @param request
+     * @return
+     */
     @GetMapping("/public/contact/detail")
     @ApiOperation("会话详情")
     public ApiResult<ChatRoomResp> getContactDetail(@Valid IdReqVO request) {
@@ -52,6 +64,12 @@ public class ContactController {
         return ApiResult.success(roomService.getContactDetail(uid, request.getId()));
     }
 
+    /**
+     * 会话详情(联系人列表发消息用)
+     *
+     * @param request
+     * @return
+     */
     @GetMapping("/public/contact/detail/friend")
     @ApiOperation("会话详情(联系人列表发消息用)")
     public ApiResult<ChatRoomResp> getContactDetailByFriend(@Valid ContactFriendReq request) {

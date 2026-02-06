@@ -52,6 +52,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class WebSocketServiceImpl implements WebSocketService {
 
+    //设置code和channel的过期时间，防止内存溢出（1小时）
     private static final Duration EXPIRE_TIME = Duration.ofHours(1);
     private static final Long MAX_MUM_SIZE = 10000L;
     /**
@@ -121,6 +122,7 @@ public class WebSocketServiceImpl implements WebSocketService {
      * 防止并发，可以给方法加上synchronize，也可以使用cas乐观锁
      * 采用 do-while 结构实现乐观锁机制（CAS 思想）
      * 生成一个不重复的登录码。并且将登录码和这个Channel用map关联起来
+     * redis和caffeine的过期时间都是1小时，防止内存溢出
      *
      * @return
      */
@@ -287,6 +289,12 @@ public class WebSocketServiceImpl implements WebSocketService {
         sendToAllOnline(wsBaseResp, null);
     }
 
+    /**
+     * 异步批量推送给指定用户
+     *
+     * @param wsBaseResp 发送的消息体
+     * @param uid        需要推送的人
+     */
     @Override
     public void sendToUid(WSBaseResp<?> wsBaseResp, Long uid) {
         CopyOnWriteArrayList<Channel> channels = ONLINE_UID_MAP.get(uid);

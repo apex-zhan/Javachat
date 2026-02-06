@@ -9,6 +9,9 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Description: 自定义敏感词工厂
+ */
 @Component
 public class MyWordFactory implements IWordFactory {
     @Autowired

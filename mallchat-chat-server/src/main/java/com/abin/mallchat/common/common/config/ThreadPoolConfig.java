@@ -1,5 +1,7 @@
 package com.abin.mallchat.common.common.config;
 
+import cn.hippo4j.core.executor.DynamicThreadPool;
+import cn.hippo4j.core.executor.support.ThreadPoolBuilder;
 import com.abin.mallchat.common.common.factory.MyThreadFactory;
 import com.abin.mallchat.transaction.annotation.SecureInvokeConfigurer;
 import org.springframework.context.annotation.Bean;
@@ -101,4 +103,35 @@ public class ThreadPoolConfig implements AsyncConfigurer, SecureInvokeConfigurer
         executor.setThreadFactory(new MyThreadFactory(executor));
         return executor;
     }
+
+    /**
+     * threadPoolId 为服务端创建的线程池 ID;通过 ThreadPoolBuilder 构建动态线程池，只有 threadFactory、threadPoolId 为必填项，其它参数会从 hippo4j-server 服务拉取。
+     *
+     * @return
+     */
+    @Bean
+    @DynamicThreadPool
+    public ThreadPoolExecutor messageConsumeDynamicExecutor() {
+        String threadPoolId = "message-consume";
+        ThreadPoolExecutor messageConsumeDynamicExecutor = ThreadPoolBuilder.builder()
+                .threadFactory(threadPoolId)
+                .threadPoolId(threadPoolId)
+                .dynamicPool()
+                .build();
+        return messageConsumeDynamicExecutor;
+    }
+
+    @Bean
+    @DynamicThreadPool
+    public ThreadPoolExecutor messageProduceDynamicExecutor() {
+        String threadPoolId = "message-produce";
+        ThreadPoolExecutor messageProduceDynamicExecutor = ThreadPoolBuilder.builder()
+                .threadFactory(threadPoolId)
+                .threadPoolId(threadPoolId)
+                .dynamicPool()
+                .build();
+        return messageProduceDynamicExecutor;
+    }
+
+
 }

@@ -22,8 +22,17 @@ import java.util.stream.Collectors;
  * Date: 2023-03-26
  */
 public class MessageAdapter {
+
+    //防止回调刷爆数据库，一次性处理过多消息
     public static final int CAN_CALLBACK_GAP_COUNT = 100;
 
+    /**
+     * 构建保存消息实体
+     *
+     * @param request 消息请求
+     * @param uid     用户id
+     * @return
+     */
     public static Message buildMsgSave(ChatMessageReq request, Long uid) {
 
         return Message.builder()
@@ -35,14 +44,24 @@ public class MessageAdapter {
 
     }
 
+    /**
+     * 构建消息响应VO
+     *
+     * @param messages
+     * @param msgMark
+     * @param receiveUid
+     * @return
+     */
     public static List<ChatMessageResp> buildMsgResp(List<Message> messages, List<MessageMark> msgMark, Long receiveUid) {
+        //消息id -> [消息标记列表],
         Map<Long, List<MessageMark>> markMap = msgMark.stream().collect(Collectors.groupingBy(MessageMark::getMsgId));
         return messages.stream().map(a -> {
-            ChatMessageResp resp = new ChatMessageResp();
-            resp.setFromUser(buildFromUser(a.getFromUid()));
-            resp.setMessage(buildMessage(a, markMap.getOrDefault(a.getId(), new ArrayList<>()), receiveUid));
-            return resp;
-        })
+                    ChatMessageResp resp = new ChatMessageResp();
+                    resp.setFromUser(buildFromUser(a.getFromUid()));
+                    resp.setMessage(buildMessage(a, markMap.getOrDefault(a.getId(), new ArrayList<>()), receiveUid));
+                    return resp;
+                })
+                //默认是升序，降序需要加上.reversed();
                 .sorted(Comparator.comparing(a -> a.getMessage().getSendTime()))//帮前端排好序，更方便它展示
                 .collect(Collectors.toList());
     }
@@ -60,10 +79,20 @@ public class MessageAdapter {
         return messageVO;
     }
 
+    /**
+     * 构建消息标记
+     *
+     * @param marks
+     * @param receiveUid
+     * @return
+     */
     private static ChatMessageResp.MessageMark buildMsgMark(List<MessageMark> marks, Long receiveUid) {
+        //对消息标记列表按消息类型进行分组，然后对每个消息类型进行分组，形成map，键为消息类型，值为消息标记列表
         Map<Integer, List<MessageMark>> typeMap = marks.stream().collect(Collectors.groupingBy(MessageMark::getType));
+        //获取点赞和举报消息标记
         List<MessageMark> likeMarks = typeMap.getOrDefault(MessageMarkTypeEnum.LIKE.getType(), new ArrayList<>());
         List<MessageMark> dislikeMarks = typeMap.getOrDefault(MessageMarkTypeEnum.DISLIKE.getType(), new ArrayList<>());
+        //构建消息标记
         ChatMessageResp.MessageMark mark = new ChatMessageResp.MessageMark();
         mark.setLikeCount(likeMarks.size());
         mark.setUserLike(Optional.ofNullable(receiveUid).filter(uid -> likeMarks.stream().anyMatch(a -> Objects.equals(a.getUid(), uid))).map(a -> YesOrNoEnum.YES.getStatus()).orElse(YesOrNoEnum.NO.getStatus()));
@@ -72,6 +101,12 @@ public class MessageAdapter {
         return mark;
     }
 
+    /**
+     * 构建发送者信息
+     *
+     * @param fromUid
+     * @return
+     */
     private static ChatMessageResp.UserInfo buildFromUser(Long fromUid) {
         ChatMessageResp.UserInfo userInfo = new ChatMessageResp.UserInfo();
         userInfo.setUid(fromUid);

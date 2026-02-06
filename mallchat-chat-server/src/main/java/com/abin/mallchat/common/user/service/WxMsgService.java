@@ -19,6 +19,7 @@ import me.chanjar.weixin.mp.bean.message.WxMpXmlOutMessage;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
@@ -47,6 +48,9 @@ public class WxMsgService {
     private UserService userService;
     @Autowired(required = false)
     private MQProducer mqProducer;
+    @Autowired
+    @Lazy
+    private WebSocketService webSocketService;
 
     public WxMpXmlOutMessage scan(WxMpService wxMpService, WxMpXmlMessage wxMpXmlMessage) {
         //得到扫码的用户openid和登录场景code
@@ -55,8 +59,15 @@ public class WxMsgService {
         User user = userDao.getByOpenId(openid);
         //如果已经注册,直接登录成功
         if (Objects.nonNull(user) && StringUtils.isNotEmpty(user.getAvatar())) {
-            if (mqProducer != null) {
-                mqProducer.sendMsg(MQConstant.LOGIN_MSG_TOPIC, new LoginMessageDTO(user.getId(), loginCode));
+            try {
+                if (mqProducer != null) {
+                    mqProducer.sendMsg(MQConstant.LOGIN_MSG_TOPIC, new LoginMessageDTO(user.getId(), loginCode));
+                } else {
+                    throw new RuntimeException("mqProducer is null");
+                }
+            } catch (Exception e) {
+                log.warn("MQ不可用，使用降级方案直接推送登录成功消息: {}", e.getMessage());
+                webSocketService.scanLoginSuccess(loginCode, user.getId());
             }
             return null;
         }
@@ -69,8 +80,16 @@ public class WxMsgService {
         //在redis中保存openid和场景code的关系，后续才能通知到前端,旧版数据没有清除,这里设置了过期时间
         RedisUtils.set(RedisKey.getKey(RedisKey.OPEN_ID_STRING, openid), loginCode, 60, TimeUnit.MINUTES);
         //授权流程,给用户发送授权消息，并且异步通知前端扫码成功,等待授权
-        if (mqProducer != null) {
-            mqProducer.sendMsg(MQConstant.SCAN_MSG_TOPIC, new ScanSuccessMessageDTO(loginCode));
+        try {
+            if (mqProducer != null) {
+                mqProducer.sendMsg(MQConstant.SCAN_MSG_TOPIC, new ScanSuccessMessageDTO(loginCode));
+            } else {
+                throw new RuntimeException("mqProducer is null");
+            }
+        } catch (Exception e) {
+            // 降级：MQ不可用时直接推送扫码成功消息(type=2)
+            log.warn("MQ不可用，使用降级方案直接推送扫码成功消息: {}", e.getMessage());
+            webSocketService.scanSuccess(loginCode);
         }
         String skipUrl = String.format(URL, wxMpService.getWxMpConfigStorage().getAppId(), URLEncoder.encode(callback + "/wx/portal/public/callBack"));
         WxMpXmlOutMessage.TEXT().build();
@@ -102,8 +121,15 @@ public class WxMsgService {
         //找到对应的code
         Integer code = RedisUtils.get(RedisKey.getKey(RedisKey.OPEN_ID_STRING, userInfo.getOpenid()), Integer.class);
         //发送登录成功事件
-        if (mqProducer != null) {
-            mqProducer.sendMsg(MQConstant.LOGIN_MSG_TOPIC, new LoginMessageDTO(user.getId(), code));
+        try {
+            if (mqProducer != null) {
+                mqProducer.sendMsg(MQConstant.LOGIN_MSG_TOPIC, new LoginMessageDTO(user.getId(), code));
+            } else {
+                throw new RuntimeException("mqProducer is null");
+            }
+        } catch (Exception e) {
+            log.warn("MQ不可用，使用降级方案直接推送登录成功消息: {}", e.getMessage());
+            webSocketService.scanLoginSuccess(code, user.getId());
         }
     }
 

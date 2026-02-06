@@ -79,19 +79,25 @@ public class Room implements Serializable {
     @TableField("update_time")
     private Date updateTime;
 
-
+    /**
+     * @return
+     * @JsonIgnore 注解是忽略字段，不会被序列化
+     */
     @JsonIgnore
     public boolean isHotRoom() {
+        // 是否全员展示
         return HotFlagEnum.of(this.hotFlag) == HotFlagEnum.YES;
     }
 
     @JsonIgnore
     public boolean isRoomFriend() {
+        // 是否单聊
         return RoomTypeEnum.of(this.type) == RoomTypeEnum.FRIEND;
     }
 
     @JsonIgnore
     public boolean isRoomGroup() {
+        // 是否群聊
         return RoomTypeEnum.of(this.type) == RoomTypeEnum.GROUP;
     }
 }

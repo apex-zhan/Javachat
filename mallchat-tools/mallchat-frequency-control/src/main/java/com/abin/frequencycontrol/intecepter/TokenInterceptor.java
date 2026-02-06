@@ -16,6 +16,9 @@ import java.util.Optional;
 @Order(-2)
 @Slf4j
 @Component
+/**
+ * token拦截器，处理登录态
+ */
 public class TokenInterceptor implements HandlerInterceptor {
 
     public static final String AUTHORIZATION_HEADER = "Authorization";

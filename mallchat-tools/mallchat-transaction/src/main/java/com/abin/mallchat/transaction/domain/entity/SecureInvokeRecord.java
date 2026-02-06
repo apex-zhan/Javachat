@@ -24,8 +24,11 @@ import java.util.Date;
 @AllArgsConstructor
 @TableName(value = "secure_invoke_record", autoResultMap = true)
 public class SecureInvokeRecord {
+
     public final static byte STATUS_WAIT = 1;
+
     public final static byte STATUS_FAIL = 2;
+
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
     /**
@@ -43,7 +46,7 @@ public class SecureInvokeRecord {
      * 下一次重试的时间
      */
     @TableField("next_retry_time")
-    @Builder.Default
+    @Builder.Default //如果字段为null，则使用默认值
     private Date nextRetryTime = new Date();
     /**
      * 已经重试的次数
@@ -51,12 +54,24 @@ public class SecureInvokeRecord {
     @TableField("retry_times")
     @Builder.Default
     private Integer retryTimes = 0;
+    /**
+     * 最大重试次数
+     */
     @TableField("max_retry_times")
     private Integer maxRetryTimes;
+    /**
+     * 失败原因
+     */
     @TableField("fail_reason")
     private String failReason;
+    /**
+     * 创建时间
+     */
     @TableField("create_time")
     private Date createTime;
+    /**
+     * 更新时间
+     */
     @TableField("update_time")
     private Date updateTime;
 

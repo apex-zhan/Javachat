@@ -28,6 +28,7 @@
         <dependency>
             <groupId>org.apache.rocketmq</groupId>
             <artifactId>rocketmq-spring-boot-starter</artifactId>
+            <version>2.2.2</version>
         </dependency>
         <dependency>
             <groupId>com.knuddels</groupId>
@@ -53,13 +54,44 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-test</artifactId>
         </dependency>
-        <!-- sa-token 权限认证框架 -->
-<!--        <dependency>-->
-<!--            <groupId>cn.dev33</groupId>-->
-<!--            <artifactId>sa-token-spring-boot-starter</artifactId>-->
-<!--            <version>1.37.0</version>-->
-<!--        </dependency>-->
-        <!-- sa-token 整合 Redis -->
+        <!--         sa-token 权限认证框架-->
+        <!--        <dependency>-->
+        <!--            <groupId>cn.dev33</groupId>-->
+        <!--            <artifactId>sa-token-spring-boot-starter</artifactId>-->
+        <!--            <version>1.37.0</version>-->
+        <!--        </dependency>-->
+        <!--sa-token 整合 Redis-->
+
+        <!--        &lt;!&ndash;    JetCache    &ndash;&gt;-->
+        <!--        <dependency>-->
+        <!--            <groupId>com.alicp.jetcache</groupId>-->
+        <!--            <artifactId>jetcache-starter-redisson</artifactId>-->
+        <!--            <version>2.7.5</version>-->
+        <!--            <exclusions>-->
+        <!--                <exclusion>-->
+        <!--                    <groupId>org.springframework.boot</groupId>-->
+        <!--                    <artifactId>spring-boot-starter-logging</artifactId>-->
+        <!--                </exclusion>-->
+        <!--            </exclusions>-->
+        <!--        </dependency>-->
+        <dependency>
+            <groupId>com.abin.mallchat.cache</groupId>
+            <artifactId>mallchat-cache-starter</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <!--线程池监控 https://hippo4j.github.io/docs/next/user_docs/getting_started/server/hippo4j-server-monitor/#%E7%BA%BF%E7%A8%8B%E6%B1%A0%E7%9B%91%E6%8E%A7%E9%85%8D%E7%BD%AE-->
+        <dependency>
+            <groupId>cn.hippo4j</groupId>
+            <artifactId>hippo4j-spring-boot-starter</artifactId>
+            <version>1.5.0</version>
+        </dependency>
+        <!--使用 micrometer 类型的监控指标-->
+        <dependency>
+            <groupId>cn.hippo4j</groupId>
+            <artifactId>hippo4j-spring-boot-starter-monitor-micrometer</artifactId>
+            <version>1.5.0</version>
+        </dependency>
+
     </dependencies>
     <build>
         <plugins>
@@ -71,6 +103,14 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>9</source>
+                    <target>9</target>
+                </configuration>
             </plugin>
         </plugins>
 

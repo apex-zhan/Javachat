@@ -22,6 +22,8 @@ public class RoomDao extends ServiceImpl<RoomMapper, Room> implements IService<R
     public void refreshActiveTime(Long roomId, Long msgId, Date msgTime) {
         lambdaUpdate()
                 .eq(Room::getId, roomId)
+                //todo 这里为了实现有序，防止并发导致最后消息id错乱，但是lastMsgId初始化时候要设置为0，用ActiveTime时间来排序也是可以的
+//                .lt(Room::getLastMsgId, msgId)
                 .set(Room::getLastMsgId, msgId)
                 .set(Room::getActiveTime, msgTime)
                 .update();

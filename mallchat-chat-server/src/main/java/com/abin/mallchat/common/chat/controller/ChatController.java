@@ -42,12 +42,13 @@ public class ChatController {
     private UserCache userCache;
 
     private Set<String> getBlackUidSet() {
+        //返回黑名单uid集合，key为黑名单类型，value为黑名单uid集合，例如：1-uid集合，2-username集合，3-phone集合，4-email集合
         return userCache.getBlackMap().getOrDefault(BlackTypeEnum.UID.getType(), new HashSet<>());
     }
 
     @GetMapping("/public/msg/page")
     @ApiOperation("消息列表")
-//    @FrequencyControl(time = 120, count = 20, target = FrequencyControl.Target.IP)
+    @FrequencyControl(time = 120, count = 20, target = FrequencyControl.Target.IP)
     public ApiResult<CursorPageBaseResp<ChatMessageResp>> getMsgPage(@Valid ChatMessagePageReq request) {
         CursorPageBaseResp<ChatMessageResp> msgPage = chatService.getMsgPage(request, RequestHolder.get().getUid());
         filterBlackMsg(msgPage);

@@ -67,9 +67,9 @@ public class UserBackpackServiceImpl implements IUserBackpackService {
      */
     @RedissonLock(
             key = "#idempotent",
-            waitTime = 2000,
-            expireTime = 20,
-            scene = "acquireItem")
+            waitTime = 2000, //锁等待时间
+            expireTime = 20, //锁过期时间
+            scene = "acquireItem") //锁场景
     private void doAcquireItem(Long uid, Long itemId, String idempotent) {
         UserBackpack userBackpack = userBackpackDao.getByIdp(idempotent);
         //1. 幂等检查

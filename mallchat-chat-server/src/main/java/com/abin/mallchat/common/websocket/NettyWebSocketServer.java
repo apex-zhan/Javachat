@@ -32,7 +32,7 @@ import javax.annotation.PreDestroy;
 @Configuration
 public class NettyWebSocketServer {
     // 端口号
-    public static final int WEB_SOCKET_PORT = 8090;
+    public static final int WEB_SOCKET_PORT = Integer.parseInt(System.getProperty("websocket.port", "8090"));
     // netty webSocket 处理器
     public static final NettyWebSocketServerHandler NETTY_WEB_SOCKET_SERVER_HANDLER = new NettyWebSocketServerHandler();
     // 创建线程池执行器
@@ -68,16 +68,17 @@ public class NettyWebSocketServer {
         // 服务器启动引导对象
         ServerBootstrap serverBootstrap = new ServerBootstrap();
         serverBootstrap.group(bossGroup, workerGroup)
-                .channel(NioServerSocketChannel.class)
-                .option(ChannelOption.SO_BACKLOG, 128)
-                .option(ChannelOption.SO_KEEPALIVE, true)
+                .channel(NioServerSocketChannel.class) // 设置通道类型为 NIO
+                .option(ChannelOption.SO_BACKLOG, 128) // 设置线程队列等待连接的个数
+                .option(ChannelOption.SO_REUSEADDR, true) //允许重复使用本地地址和端口
+                .option(ChannelOption.SO_KEEPALIVE, true) //开启 TCP 底层心跳机制，保持连接活跃
                 .handler(new LoggingHandler(LogLevel.INFO)) // 为 bossGroup 添加 日志处理器
                 .childHandler(new ChannelInitializer<SocketChannel>() {
                     @Override
                     protected void initChannel(SocketChannel socketChannel) throws Exception {
                         ChannelPipeline pipeline = socketChannel.pipeline();
-                        //30秒客户端没有向服务器发送心跳则关闭连接
-                        pipeline.addLast(new IdleStateHandler(30, 0, 0));
+                        // 30秒客户端没有向服务器发送心跳则关闭连接（todo本地测试最好注释）
+                        // pipeline.addLast(new IdleStateHandler(30, 0, 0));
                         // 因为使用http协议，所以需要使用http的编码器，解码器
                         pipeline.addLast(new HttpServerCodec());
                         // 以块方式写，添加 chunkedWriter 处理器

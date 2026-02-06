@@ -304,6 +304,12 @@ public class ChatServiceImpl implements ChatService {
         }
     }
 
+    /**
+     * 撤回校验
+     *
+     * @param uid
+     * @param message
+     */
     private void checkRecall(Long uid, Message message) {
         AssertUtil.isNotEmpty(message, "消息有误");
         AssertUtil.notEqual(message.getType(), MessageTypeEnum.RECALL.getType(), "消息无法撤回");
@@ -311,8 +317,9 @@ public class ChatServiceImpl implements ChatService {
         if (hasPower) {
             return;
         }
-        boolean self = Objects.equals(uid, message.getFromUid());
-        AssertUtil.isTrue(self, "抱歉,您没有权限");
+//        boolean self = Objects.equals(uid, message.getFromUid());
+//        AssertUtil.isTrue(self, "抱歉,您没有权限");
+        AssertUtil.equal(uid, message.getFromUid(), "抱歉,您没有权限");
         long between = DateUtil.between(message.getCreateTime(), new Date(), DateUnit.MINUTE);
         AssertUtil.isTrue(between < 2, "覆水难收，超过2分钟的消息不能撤回哦~~");
     }

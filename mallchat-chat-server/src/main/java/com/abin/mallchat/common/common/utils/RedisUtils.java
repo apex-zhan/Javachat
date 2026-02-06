@@ -985,6 +985,7 @@ public class RedisUtils {
 
     /**
      * 获取集合的元素, 从大到小排序, 并返回score值
+     * 查询的是整个范围内的数据（从最小值到最大值）
      *
      * @param key
      * @param pageSize
@@ -997,6 +998,9 @@ public class RedisUtils {
     }
 
     /**
+     * 获取集合的元素, 从大到小排序, 并返回score值
+     * 配合max参数用于分页查询，其中max通常是上一页最后一条记录的分数，而offset设为1是为了跳过这个作为分页标记的记录本身
+     *
      * @param key
      * @param max
      * @param pageSize

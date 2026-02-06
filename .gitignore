@@ -76,3 +76,11 @@ ChannelBizBrandWallClient.java
 
 # yml
 *.yml
+/.vscode/
+/.obsidian/
+/.kiro/
+/.cursor/
+/.claude/
+/logs/
+/Excalidraw/
+/前端/

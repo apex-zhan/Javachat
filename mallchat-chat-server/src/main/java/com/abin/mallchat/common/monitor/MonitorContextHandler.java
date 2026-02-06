@@ -2,6 +2,9 @@ package com.abin.mallchat.common.monitor;
 
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * 监控上下文处理器
+ */
 @Slf4j
 public class MonitorContextHandler {
     public static final ThreadLocal<MonitorContext> START_TIME = new ThreadLocal<>();

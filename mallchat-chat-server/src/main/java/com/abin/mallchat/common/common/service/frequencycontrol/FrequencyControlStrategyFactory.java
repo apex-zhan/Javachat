@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class FrequencyControlStrategyFactory {
     /**
-     * 指定时间内总次数限流
+     * 指定时间内总次数限流（默认）
      */
     public static final String TOTAL_COUNT_WITH_IN_FIX_TIME_FREQUENCY_CONTROLLER = "TotalCountWithInFixTime";
     /**

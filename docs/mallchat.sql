@@ -44,6 +44,7 @@ CREATE TABLE `message`  (
   `gap_count` int(11) NULL DEFAULT NULL COMMENT '与回复的消息间隔多少条',
   `type` int(11) NULL DEFAULT 1 COMMENT '消息类型 1正常文本 2.撤回消息',
   `extra` json DEFAULT NULL COMMENT '扩展信息',
+  `version` INT NOT NULL DEFAULT 0 COMMENT '版本号（用于乐观锁），修改消息内容时版本号加1',
   `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
   `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '修改时间',
   PRIMARY KEY (`id`) USING BTREE,

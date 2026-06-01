@@ -13,14 +13,6 @@ import reactor.core.publisher.Flux;
 public interface AIAssistantService {
 
     /**
-     * 总结聊天内容（流式）
-     *
-     * @param request 总结请求（包含聊天记录范围）
-     * @return 流式响应
-     */
-    Flux<String> summarizeChat(ChatSummaryRequest request);
-
-    /**
      * 智能问答（流式）
      *
      * @param request 问答请求

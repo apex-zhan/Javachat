@@ -43,15 +43,7 @@
             <groupId>com.abin.mallchat</groupId>
             <artifactId>mallchat-common-starter</artifactId>
         </dependency>
-        
-        <!-- Chat Server (for MessageDao access) -->
-        <dependency>
-            <groupId>com.abin.mallchat</groupId>
-            <artifactId>mallchat-chat-server</artifactId>
-            <version>1.0-SNAPSHOT</version>
-            <scope>provided</scope>
-        </dependency>
-        
+
         <!-- jqwik for property-based testing -->
         <dependency>
             <groupId>net.jqwik</groupId>

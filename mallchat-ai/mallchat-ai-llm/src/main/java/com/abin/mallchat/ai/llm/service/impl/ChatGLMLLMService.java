@@ -4,6 +4,7 @@ import com.abin.mallchat.ai.llm.domain.LLMOptions;
 import com.abin.mallchat.ai.llm.exception.LLMApiException;
 import com.abin.mallchat.ai.llm.service.LLMService;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.model.StreamingResponseHandler;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
@@ -11,6 +12,7 @@ import dev.langchain4j.model.output.Response;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
@@ -19,6 +21,7 @@ import reactor.core.publisher.FluxSink;
 
 import javax.annotation.PostConstruct;
 import java.time.Duration;
+import java.util.List;
 
 /**
  * ChatGLM LLM 服务实现（基于 LangChain4j）
@@ -40,6 +43,7 @@ import java.time.Duration;
  */
 @Slf4j
 @Service
+@Profile("!mock")
 @ConditionalOnProperty(name = "langchain4j.llm.provider", havingValue = "chatglm")
 public class ChatGLMLLMService implements LLMService {
     
@@ -158,6 +162,72 @@ public class ChatGLMLLMService implements LLMService {
         }
     }
     
+    @Override
+    @Retryable(
+            value = {LLMApiException.class},
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 1000, multiplier = 2)
+    )
+    public Flux<String> streamChat(List<ChatMessage> messages, LLMOptions options) {
+        log.info("ChatGLM stream chat with messages called, count: {}", messages.size());
+
+        if (streamingChatModel == null) {
+            log.error("ChatGLM streaming model not initialized");
+            return Flux.error(new LLMApiException("ChatGLM streaming model not initialized"));
+        }
+
+        return Flux.create(sink -> {
+            try {
+                streamingChatModel.generate(messages, new StreamingResponseHandler<AiMessage>() {
+                    @Override
+                    public void onNext(String token) {
+                        sink.next(token);
+                    }
+
+                    @Override
+                    public void onComplete(Response<AiMessage> response) {
+                        sink.complete();
+                    }
+
+                    @Override
+                    public void onError(Throwable error) {
+                        log.error("ChatGLM streaming error", error);
+                        sink.error(new LLMApiException("ChatGLM API call failed", error));
+                    }
+                });
+            } catch (Exception e) {
+                log.error("ChatGLM stream chat with messages failed", e);
+                sink.error(new LLMApiException("ChatGLM stream chat failed", e));
+            }
+        }, FluxSink.OverflowStrategy.BUFFER);
+    }
+
+    @Override
+    @Retryable(
+            value = {LLMApiException.class},
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 1000, multiplier = 2)
+    )
+    public String chat(List<ChatMessage> messages, LLMOptions options) {
+        log.info("ChatGLM chat with messages called, count: {}", messages.size());
+
+        if (chatModel == null) {
+            log.error("ChatGLM model not initialized");
+            throw new LLMApiException("ChatGLM model not initialized");
+        }
+
+        try {
+            Response<AiMessage> response = chatModel.generate(messages);
+            String responseText = response.content().text();
+            log.debug("ChatGLM response length: {}", responseText.length());
+            return responseText;
+
+        } catch (Exception e) {
+            log.error("ChatGLM chat with messages failed", e);
+            throw new LLMApiException("ChatGLM API call failed", e);
+        }
+    }
+
     @Override
     public int countTokens(String text) {
         if (text == null || text.isEmpty()) {

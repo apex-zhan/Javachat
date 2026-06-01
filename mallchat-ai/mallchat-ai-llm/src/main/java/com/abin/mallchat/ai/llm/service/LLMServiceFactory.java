@@ -68,10 +68,20 @@ public class LLMServiceFactory {
                 serviceMap.put(LLMProvider.CHATGLM, service);
             } else if (beanName.toLowerCase().contains("claude")) {
                 serviceMap.put(LLMProvider.CLAUDE, service);
+            } else if (beanName.toLowerCase().contains("qwenllm")) {
+                // Qwen2.5-14B via Ollama (推荐)
+                serviceMap.put(LLMProvider.QWEN_OLLAMA, service);
+            } else if (beanName.toLowerCase().contains("llamallm")) {
+                // Llama3-70B via Ollama (备选)
+                serviceMap.put(LLMProvider.LLAMA, service);
             } else if (beanName.toLowerCase().contains("qwen")) {
+                // 阿里云 Qwen API (兼容旧配置)
                 serviceMap.put(LLMProvider.QWEN, service);
             } else if (beanName.toLowerCase().contains("ernie")) {
                 serviceMap.put(LLMProvider.ERNIE, service);
+            } else if (beanName.toLowerCase().contains("mock")) {
+                // Mock模式下的LLM服务
+                serviceMap.put(LLMProvider.MOCK, service);
             }
         }
         

@@ -37,6 +37,18 @@
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-open-ai</artifactId>
         </dependency>
+
+        <!-- LangChain4j Ollama for Local Embeddings -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-ollama</artifactId>
+        </dependency>
+
+        <!-- Qdrant Vector Database -->
+        <dependency>
+            <groupId>io.qdrant</groupId>
+            <artifactId>qdrant-java-client</artifactId>
+        </dependency>
         
         <!-- jqwik for property-based testing -->
         <dependency>

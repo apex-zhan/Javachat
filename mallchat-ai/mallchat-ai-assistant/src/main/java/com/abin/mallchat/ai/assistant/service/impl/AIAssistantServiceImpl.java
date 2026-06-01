@@ -1,6 +1,5 @@
 package com.abin.mallchat.ai.assistant.service.impl;
 
-import com.abin.mallchat.ai.assistant.domain.dto.ChatSummaryRequest;
 import com.abin.mallchat.ai.assistant.domain.dto.QuestionRequest;
 import com.abin.mallchat.ai.assistant.service.AIAssistantService;
 import com.abin.mallchat.ai.common.dao.AIConversationDao;
@@ -8,10 +7,8 @@ import com.abin.mallchat.ai.common.domain.entity.AIConversation;
 import com.abin.mallchat.ai.common.domain.enums.ConversationType;
 import com.abin.mallchat.ai.llm.domain.LLMOptions;
 import com.abin.mallchat.ai.llm.service.LLMService;
-import com.abin.mallchat.common.chat.dao.MessageDao;
-import com.abin.mallchat.common.chat.domain.entity.Message;
-import com.abin.mallchat.common.common.domain.vo.request.CursorPageBaseReq;
-import com.abin.mallchat.common.common.domain.vo.response.CursorPageBaseResp;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -24,10 +21,9 @@ import reactor.core.publisher.Flux;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 /**
  * AI助手服务实现
@@ -43,60 +39,16 @@ public class AIAssistantServiceImpl implements AIAssistantService {
     private LLMService llmService;
 
     @Autowired
-    private MessageDao messageDao;
-
-    @Autowired
     private AIConversationDao aiConversationDao;
 
-    @Autowired
+    @Autowired(required = false)
     private OpenAiTokenizer tokenizer;
 
     @Value("${langchain4j.open-ai.chat-model.max-tokens:4096}")
     private Integer defaultMaxTokens;
 
-    @Value("${ai.assistant.summary.system-prompt:你是一个专业的聊天内容总结助手。请根据提供的聊天记录，生成简洁、准确的总结，突出关键信息和重要讨论点。}")
-    private String summarySystemPrompt;
-
     @Value("${ai.assistant.qa.system-prompt:你是一个智能助手，请根据用户的问题提供准确、有帮助的回答。}")
     private String qaSystemPrompt;
-
-    @Override
-    public Flux<String> summarizeChat(ChatSummaryRequest request) {
-        log.info("开始总结聊天内容，房间ID: {}", request.getRoomId());
-
-        try {
-            // 1. 获取指定范围的聊天记录
-            List<Message> messages = fetchChatMessages(request);
-
-            if (messages.isEmpty()) {
-                return Flux.just("没有找到聊天记录。");
-            }
-
-            // 2. 构建聊天内容文本
-            String chatContent = buildChatContent(messages);
-
-            // 3. 检查token数量，超出则截断
-            int maxTokens = request.getMaxTokens() != null ? request.getMaxTokens() : defaultMaxTokens;
-            String truncatedContent = truncateContentIfNeeded(chatContent, maxTokens);
-
-            // 4. 构造总结Prompt
-            String prompt = buildSummaryPrompt(truncatedContent);
-
-            // 5. 调用LLM流式生成总结
-            LLMOptions options = LLMOptions.builder()
-                    .temperature(0.7)
-                    .maxTokens(1000)
-                    .build();
-
-            return llmService.streamChat(prompt, options)
-                    .doOnComplete(() -> log.info("聊天内容总结完成，房间ID: {}", request.getRoomId()))
-                    .doOnError(e -> log.error("聊天内容总结失败，房间ID: {}", request.getRoomId(), e));
-
-        } catch (Exception e) {
-            log.error("总结聊天内容时发生错误", e);
-            return Flux.just("抱歉，总结聊天内容时发生错误，请稍后再试。");
-        }
-    }
 
     @Override
     public Flux<String> answerQuestion(QuestionRequest request) {
@@ -105,14 +57,28 @@ public class AIAssistantServiceImpl implements AIAssistantService {
         long startTime = System.currentTimeMillis();
         AtomicReference<String> fullResponse = new AtomicReference<>("");
 
+        // 生成或获取会话ID
+        final String sessionId;
+        final boolean isNewSession;
+        if (request.getConversationId() == null || request.getConversationId().trim().isEmpty()) {
+            sessionId = generateSessionId();
+            isNewSession = true;
+            log.info("创建新会话，sessionId: {}, 用户ID: {}", sessionId, request.getUserId());
+        } else {
+            sessionId = request.getConversationId();
+            isNewSession = false;
+            log.info("继续会话，sessionId: {}, 用户ID: {}", sessionId, request.getUserId());
+        }
+        final String finalSessionId = sessionId;
+
         try {
             // 1. 验证问题内容合法性
             if (!validateQuestion(request.getQuestion())) {
                 return Flux.just("抱歉，您的问题包含不合法的内容，请重新提问。");
             }
 
-            // 2. 构造问答Prompt（可选上下文）
-            String prompt = buildQuestionPrompt(request);
+            // 2. 构造对话消息列表（支持多轮对话上下文）
+            List<ChatMessage> messages = buildConversationMessages(request, finalSessionId);
 
             // 3. 调用LLM流式生成回答
             LLMOptions options = LLMOptions.builder()
@@ -120,7 +86,7 @@ public class AIAssistantServiceImpl implements AIAssistantService {
                     .maxTokens(2000)
                     .build();
 
-            return llmService.streamChat(prompt, options)
+            return llmService.streamChat(messages, options)
                     .doOnNext(chunk -> {
                         // 累积完整响应
                         fullResponse.updateAndGet(current -> current + chunk);
@@ -128,13 +94,14 @@ public class AIAssistantServiceImpl implements AIAssistantService {
                     .doOnComplete(() -> {
                         // 4. 保存对话历史到数据库
                         long responseTime = System.currentTimeMillis() - startTime;
-                        saveConversationHistory(request, fullResponse.get(), responseTime);
-                        log.info("智能问答完成，用户ID: {}, 耗时: {}ms", request.getUserId(), responseTime);
+                        saveConversationHistory(request, finalSessionId, fullResponse.get(), responseTime);
+                        log.info("智能问答完成，用户ID: {}, sessionId: {}, 耗时: {}ms, 新会话: {}",
+                                request.getUserId(), finalSessionId, responseTime, isNewSession);
                     })
                     .doOnError(e -> {
-                        log.error("智能问答失败，用户ID: {}", request.getUserId(), e);
+                        log.error("智能问答失败，用户ID: {}, sessionId: {}", request.getUserId(), finalSessionId, e);
                         // 即使失败也保存记录
-                        saveConversationHistory(request, "ERROR: " + e.getMessage(), 
+                        saveConversationHistory(request, finalSessionId, "ERROR: " + e.getMessage(),
                                 System.currentTimeMillis() - startTime);
                     });
 
@@ -155,7 +122,7 @@ public class AIAssistantServiceImpl implements AIAssistantService {
         // 基本的内容安全检查
         String lowerQuestion = question.toLowerCase();
         String[] forbiddenWords = {"hack", "attack", "exploit", "inject"};
-        
+
         for (String word : forbiddenWords) {
             if (lowerQuestion.contains(word)) {
                 log.warn("问题包含敏感词: {}", word);
@@ -167,32 +134,159 @@ public class AIAssistantServiceImpl implements AIAssistantService {
     }
 
     /**
-     * 构造问答Prompt
+     * 生成唯一会话ID
      */
-    private String buildQuestionPrompt(QuestionRequest request) {
-        StringBuilder promptBuilder = new StringBuilder();
-        promptBuilder.append(qaSystemPrompt).append("\n\n");
+    private String generateSessionId() {
+        return "conv_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+    }
 
-        // 如果有上下文信息，添加到prompt中
+    /**
+     * 构造多轮对话消息列表
+     * 包含系统提示 + 历史对话 + 当前问题
+     */
+    private List<ChatMessage> buildConversationMessages(QuestionRequest request, String sessionId) {
+        List<ChatMessage> messages = new ArrayList<>();
+
+        // 1. 添加系统提示
+        messages.add(new SystemMessage(qaSystemPrompt));
+
+        // 2. 如果有上下文信息，作为补充背景
         if (request.getContext() != null && !request.getContext().trim().isEmpty()) {
-            promptBuilder.append("上下文信息：\n");
-            promptBuilder.append(request.getContext()).append("\n\n");
+            messages.add(new UserMessage("背景信息：" + request.getContext()));
+            messages.add(new AiMessage("明白了，我会结合这些背景信息来回答您的问题。"));
         }
 
-        promptBuilder.append("用户问题：\n");
-        promptBuilder.append(request.getQuestion()).append("\n\n");
-        promptBuilder.append("请提供回答：");
+        // 3. 加载历史对话记录（多轮对话上下文）
+        List<AIConversation> history = loadConversationHistory(sessionId);
+        for (AIConversation conv : history) {
+            if (conv.getUserInput() != null && !conv.getUserInput().isEmpty()) {
+                messages.add(new UserMessage(conv.getUserInput()));
+            }
+            if (conv.getAiResponse() != null && !conv.getAiResponse().isEmpty()
+                    && !conv.getAiResponse().startsWith("ERROR:")) {
+                messages.add(new AiMessage(conv.getAiResponse()));
+            }
+        }
 
-        return promptBuilder.toString();
+        // 4. 添加当前问题
+        messages.add(new UserMessage(request.getQuestion()));
+
+        // 5. 检查token数量，如果超出限制则截断历史
+        int maxTokens = defaultMaxTokens != null ? defaultMaxTokens : 4096;
+        messages = truncateMessagesIfNeeded(messages, maxTokens);
+
+        log.info("构建对话消息列表完成，共 {} 条消息，sessionId: {}", messages.size(), sessionId);
+        return messages;
+    }
+
+    /**
+     * 加载指定会话的历史对话记录
+     */
+    private List<AIConversation> loadConversationHistory(String sessionId) {
+        try {
+            LambdaQueryWrapper<AIConversation> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(AIConversation::getSessionId, sessionId)
+                    .eq(AIConversation::getConversationType, ConversationType.QA.name())
+                    .orderByAsc(AIConversation::getCreateTime)
+                    .last("LIMIT 20"); // 最多加载最近20轮对话
+
+            return aiConversationDao.list(wrapper);
+        } catch (Exception e) {
+            log.error("加载对话历史失败，sessionId: {}", sessionId, e);
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * 检查消息列表token数量，超出限制时截断历史消息
+     */
+    private List<ChatMessage> truncateMessagesIfNeeded(List<ChatMessage> messages, int maxTokens) {
+        // Mock模式下tokenizer可能为空，使用简单的字符数估算
+        int tokenCount = estimateTokenCountInMessages(messages);
+
+        if (tokenCount <= maxTokens) {
+            return messages;
+        }
+
+        log.warn("对话消息token数量: {} 超出限制: {}，需要截断历史", tokenCount, maxTokens);
+
+        // 保留系统提示和最近的消息，移除较早的历史
+        List<ChatMessage> truncated = new ArrayList<>();
+        truncated.add(messages.get(0)); // 保留系统提示
+
+        // 从后往前添加消息，直到接近限制
+        int currentTokens = estimateTokenCountInMessages(List.of(messages.get(0)));
+        for (int i = messages.size() - 1; i > 0; i--) {
+            ChatMessage msg = messages.get(i);
+            int msgTokens = estimateMessageTokens(msg);
+            if (currentTokens + msgTokens < maxTokens * 0.8) { // 保留20%余量
+                truncated.add(msg);
+                currentTokens += msgTokens;
+            } else {
+                break;
+            }
+        }
+
+        // 重新排序（系统提示在前，然后是按时间顺序的消息）
+        List<ChatMessage> result = new ArrayList<>();
+        result.add(truncated.get(0)); // 系统提示
+        for (int i = truncated.size() - 1; i > 0; i--) {
+            result.add(truncated.get(i));
+        }
+
+        log.info("截断后消息数量: {}, 估计token: {}", result.size(), currentTokens);
+        return result;
+    }
+
+    /**
+     * 估算消息列表的token数量
+     * 优先使用OpenAiTokenizer，不可用则使用字符数估算
+     */
+    private int estimateTokenCountInMessages(List<ChatMessage> messages) {
+        if (tokenizer != null) {
+            return tokenizer.estimateTokenCountInMessages(messages);
+        }
+        // Mock模式降级：简单估算（中文字符约1.5字符/token，英文约4字符/token）
+        int totalChars = messages.stream()
+                .mapToInt(msg -> {
+                    if (msg instanceof SystemMessage) return ((SystemMessage) msg).text().length();
+                    else if (msg instanceof UserMessage) return ((UserMessage) msg).text().length();
+                    else if (msg instanceof AiMessage) return ((AiMessage) msg).text().length();
+                    return 0;
+                }).sum();
+        return totalChars / 2; // 粗略估算
+    }
+
+    /**
+     * 估算单条消息的token数量
+     */
+    private int estimateMessageTokens(ChatMessage message) {
+        if (tokenizer != null) {
+            if (message instanceof SystemMessage) {
+                return tokenizer.estimateTokenCountInText(((SystemMessage) message).text());
+            } else if (message instanceof UserMessage) {
+                return tokenizer.estimateTokenCountInText(((UserMessage) message).text());
+            } else if (message instanceof AiMessage) {
+                return tokenizer.estimateTokenCountInText(((AiMessage) message).text());
+            }
+            return 0;
+        }
+        // Mock模式降级
+        String text = "";
+        if (message instanceof SystemMessage) text = ((SystemMessage) message).text();
+        else if (message instanceof UserMessage) text = ((UserMessage) message).text();
+        else if (message instanceof AiMessage) text = ((AiMessage) message).text();
+        return text.length() / 2;
     }
 
     /**
      * 保存对话历史
      */
-    private void saveConversationHistory(QuestionRequest request, String response, long responseTime) {
+    private void saveConversationHistory(QuestionRequest request, String sessionId, String response, long responseTime) {
         try {
             AIConversation conversation = new AIConversation();
             conversation.setUserId(request.getUserId());
+            conversation.setSessionId(sessionId);
             conversation.setConversationType(ConversationType.QA.name());
             conversation.setUserInput(request.getQuestion());
             conversation.setAiResponse(response);
@@ -205,126 +299,11 @@ public class AIAssistantServiceImpl implements AIAssistantService {
             }
 
             aiConversationDao.save(conversation);
-            log.info("对话历史已保存，用户ID: {}", request.getUserId());
+            log.info("对话历史已保存，用户ID: {}, sessionId: {}", request.getUserId(), sessionId);
 
         } catch (Exception e) {
             log.error("保存对话历史失败", e);
             // 不抛出异常，避免影响主流程
         }
-    }
-
-    /**
-     * 获取聊天记录
-     */
-    private List<Message> fetchChatMessages(ChatSummaryRequest request) {
-        List<Message> allMessages = new ArrayList<>();
-
-        if (request.getMessageCount() != null && request.getMessageCount() > 0) {
-            // 按消息数量获取
-            CursorPageBaseReq pageReq = new CursorPageBaseReq();
-            pageReq.setPageSize(request.getMessageCount());
-            CursorPageBaseResp<Message> page = messageDao.getCursorPage(request.getRoomId(), pageReq, null);
-            allMessages.addAll(page.getList());
-        } else {
-            // 按时间范围获取（分页获取所有）
-            CursorPageBaseReq pageReq = new CursorPageBaseReq();
-            pageReq.setPageSize(100);
-            String cursor = null;
-            boolean hasMore = true;
-
-            while (hasMore) {
-                pageReq.setCursor(cursor);
-                CursorPageBaseResp<Message> page = messageDao.getCursorPage(request.getRoomId(), pageReq, null);
-                
-                List<Message> pageMessages = page.getList().stream()
-                        .filter(msg -> filterByTimeRange(msg, request))
-                        .collect(Collectors.toList());
-                
-                allMessages.addAll(pageMessages);
-                
-                cursor = page.getCursor();
-                hasMore = page.getIsLast() != null && !page.getIsLast();
-                
-                // 防止无限循环
-                if (allMessages.size() > 10000) {
-                    log.warn("聊天记录数量超过10000条，停止获取");
-                    break;
-                }
-            }
-        }
-
-        // 按时间排序（从旧到新）
-        allMessages.sort(Comparator.comparing(Message::getCreateTime));
-
-        log.info("获取到{}条聊天记录", allMessages.size());
-        return allMessages;
-    }
-
-    /**
-     * 按时间范围过滤消息
-     */
-    private boolean filterByTimeRange(Message message, ChatSummaryRequest request) {
-        if (request.getStartTime() != null && message.getCreateTime().before(request.getStartTime())) {
-            return false;
-        }
-        if (request.getEndTime() != null && message.getCreateTime().after(request.getEndTime())) {
-            return false;
-        }
-        return true;
-    }
-
-    /**
-     * 构建聊天内容文本
-     */
-    private String buildChatContent(List<Message> messages) {
-        StringBuilder sb = new StringBuilder();
-        for (Message message : messages) {
-            sb.append(String.format("[%s] 用户%d: %s\n",
-                    message.getCreateTime(),
-                    message.getFromUid(),
-                    message.getContent()));
-        }
-        return sb.toString();
-    }
-
-    /**
-     * 检查token数量并截断内容
-     */
-    private String truncateContentIfNeeded(String content, int maxTokens) {
-        // 为系统提示和总结输出预留token
-        int reservedTokens = 500;
-        int availableTokens = maxTokens - reservedTokens;
-
-        List<ChatMessage> messages = new ArrayList<>();
-        messages.add(new SystemMessage(summarySystemPrompt));
-        messages.add(new UserMessage(content));
-
-        int tokenCount = tokenizer.estimateTokenCountInMessages(messages);
-
-        if (tokenCount <= maxTokens) {
-            log.info("内容token数量: {}, 在限制范围内", tokenCount);
-            return content;
-        }
-
-        log.warn("内容token数量: {}, 超出限制: {}, 需要截断", tokenCount, maxTokens);
-
-        // 简单截断策略：按字符比例截断
-        double ratio = (double) availableTokens / tokenCount;
-        int targetLength = (int) (content.length() * ratio * 0.9); // 0.9是安全系数
-
-        String truncated = content.substring(0, Math.min(targetLength, content.length()));
-        truncated += "\n\n[注：由于内容过长，部分聊天记录已被截断]";
-
-        log.info("截断后内容长度: {}", truncated.length());
-        return truncated;
-    }
-
-    /**
-     * 构造总结Prompt
-     */
-    private String buildSummaryPrompt(String chatContent) {
-        return String.format("%s\n\n以下是需要总结的聊天记录：\n\n%s\n\n请生成总结：",
-                summarySystemPrompt,
-                chatContent);
     }
 }

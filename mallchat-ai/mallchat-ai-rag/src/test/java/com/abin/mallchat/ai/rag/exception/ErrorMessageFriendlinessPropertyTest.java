@@ -1,7 +1,7 @@
 package com.abin.mallchat.ai.rag.exception;
 
+import com.abin.mallchat.ai.common.domain.vo.ApiResult;
 import com.abin.mallchat.ai.common.exception.*;
-import com.abin.mallchat.common.common.domain.vo.response.ApiResult;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.StringLength;
 import org.junit.jupiter.api.BeforeEach;

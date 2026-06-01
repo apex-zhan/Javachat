@@ -174,12 +174,12 @@ public class VectorSearchTopKPropertyTest {
     // ==================== Arbitraries ====================
     
     /**
-     * Generate valid query vectors (1536 dimensions for OpenAI embeddings)
+     * Generate valid query vectors (1024 dimensions for bge-large-zh-v1.5 embeddings)
      */
     @Provide
     Arbitrary<float[]> validQueryVectors() {
         return Arbitraries.integers()
-                .between(128, 1536)
+                .between(128, 1024)
                 .flatMap(dimension -> 
                         Arbitraries.floats()
                                 .between(-1.0f, 1.0f)

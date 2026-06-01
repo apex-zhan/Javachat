@@ -23,6 +23,8 @@ import io.milvus.response.SearchResultsWrapper;
 import io.milvus.grpc.QueryResults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
@@ -38,6 +40,8 @@ import java.util.concurrent.TimeUnit;
  */
 @Slf4j
 @Service
+@Profile("!mock")
+@ConditionalOnProperty(name = "vector.store.provider", havingValue = "milvus")
 public class MilvusVectorService implements VectorService {
     
     @Value("${milvus.host}")

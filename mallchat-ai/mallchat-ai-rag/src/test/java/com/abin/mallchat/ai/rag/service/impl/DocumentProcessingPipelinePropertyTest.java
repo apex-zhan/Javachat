@@ -265,7 +265,7 @@ class DocumentProcessingPipelinePropertyTest {
     private List<float[]> generateMockEmbeddings(int count) {
         List<float[]> embeddings = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            float[] embedding = new float[1536]; // OpenAI embedding dimension
+            float[] embedding = new float[1024]; // bge-large-zh-v1.5 embedding dimension
             for (int j = 0; j < embedding.length; j++) {
                 embedding[j] = (float) Math.random();
             }

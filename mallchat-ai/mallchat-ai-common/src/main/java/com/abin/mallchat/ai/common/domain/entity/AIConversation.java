@@ -21,7 +21,12 @@ public class AIConversation {
      */
     @TableId(type = IdType.AUTO)
     private Long id;
-    
+
+    /**
+     * 会话ID（用于多轮对话）
+     */
+    private String sessionId;
+
     /**
      * 用户ID
      */

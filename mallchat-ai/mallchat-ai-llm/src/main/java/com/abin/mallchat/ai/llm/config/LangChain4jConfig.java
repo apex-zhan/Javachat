@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
 import java.time.Duration;
 
@@ -20,6 +21,7 @@ import java.time.Duration;
  */
 @Slf4j
 @Configuration
+@Profile("!mock")
 public class LangChain4jConfig {
     
     @Value("${langchain4j.openai.api-key}")

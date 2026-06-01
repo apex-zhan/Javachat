@@ -28,6 +28,13 @@ public class QuestionRequest {
     private Long userId;
 
     /**
+     * 会话ID（可选，用于多轮对话）
+     * 首次对话可不传，服务端会生成新的 sessionId 并在响应头中返回
+     * 后续对话需携带此 ID 以保持上下文
+     */
+    private String conversationId;
+
+    /**
      * 问题内容
      */
     @NotBlank(message = "问题内容不能为空")

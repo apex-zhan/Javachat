@@ -8,6 +8,8 @@ import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import dev.langchain4j.model.output.Response;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
@@ -16,13 +18,21 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * OpenAI Embedding 服务实现（基于 LangChain4j）
- * 使用 OpenAI 的 text-embedding-ada-002 模型生成向量
+ * Embedding 服务实现（基于 LangChain4j）
+ * 支持通过 OpenAI 兼容 API 使用各种 Embedding 模型
+ * 默认使用 bge-large-zh-v1.5 模型（向量维度 1024）
+ * 
+ * 支持的部署方式：
+ * - Ollama: 设置 base-url 为 http://localhost:11434/v1，api-key 为 ollama
+ * - vLLM: 设置 base-url 为 vLLM 服务地址，api-key 为 EMPTY 或任意值
+ * - 第三方服务: 如硅基流动、智谱 AI 等
  * 
  * @author abin
  */
 @Slf4j
 @Service
+@Profile("!mock")
+@ConditionalOnProperty(name = "embedding.provider", havingValue = "openai")
 public class OpenAIEmbeddingService implements EmbeddingService {
     
     @Value("${langchain4j.openai.api-key}")
@@ -31,8 +41,11 @@ public class OpenAIEmbeddingService implements EmbeddingService {
     @Value("${langchain4j.openai.base-url:https://api.openai.com/v1}")
     private String baseUrl;
     
-    @Value("${langchain4j.openai.embedding-model.model-name:text-embedding-ada-002}")
+    @Value("${langchain4j.openai.embedding-model.model-name:bge-large-zh-v1.5}")
     private String modelName;
+    
+    @Value("${langchain4j.openai.embedding-model.dimensions:1024}")
+    private Integer dimensions;
     
     @Value("${langchain4j.openai.timeout:60s}")
     private Duration timeout;
@@ -47,7 +60,8 @@ public class OpenAIEmbeddingService implements EmbeddingService {
      */
     @PostConstruct
     public void init() {
-        log.info("Initializing OpenAI Embedding Model: {}", modelName);
+        log.info("Initializing Embedding Model: {}, dimensions: {}", modelName, dimensions);
+        log.info("Base URL: {}", baseUrl);
         
         this.embeddingModel = OpenAiEmbeddingModel.builder()
                 .apiKey(apiKey)
@@ -59,7 +73,7 @@ public class OpenAIEmbeddingService implements EmbeddingService {
                 .logResponses(false)
                 .build();
         
-        log.info("OpenAI Embedding Model initialized successfully");
+        log.info("Embedding Model initialized successfully");
     }
     
     /**

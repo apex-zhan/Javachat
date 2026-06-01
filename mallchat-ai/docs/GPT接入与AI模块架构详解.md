@@ -1016,7 +1016,7 @@ public class DocumentIndexingProducerImpl implements DocumentIndexingProducer {
     }
 }
 
-// 2. 消费者：���理索引任务
+// 2. 消费者：处理索引任务
 @Component
 @RocketMQMessageListener(
     topic = "MALLCHAT_AI_DOCUMENT_INDEXING",
@@ -2027,4 +2027,3 @@ public class RAGServiceImpl {
 - [OpenAI API 文档](https://platform.openai.com/docs/api-reference)
 - [Reactor 官方文档](https://projectreactor.io/docs)
 - [Resilience4j 官方文档](https://resilience4j.readme.io/)
-

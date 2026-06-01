@@ -5,6 +5,7 @@ import com.abin.mallchat.ai.llm.domain.LLMOptions;
 import com.abin.mallchat.ai.llm.exception.LLMApiException;
 import com.abin.mallchat.ai.llm.service.LLMService;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.openai.OpenAiTokenizer;
@@ -15,8 +16,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+
+import java.util.List;
 
 /**
  * OpenAI LLM 服务实现（基于 LangChain4j）
@@ -26,6 +30,7 @@ import reactor.core.publisher.Flux;
  */
 @Slf4j
 @Service
+@Profile("!mock")
 public class OpenAILLMService implements LLMService {
     
     @Autowired
@@ -133,7 +138,7 @@ public class OpenAILLMService implements LLMService {
         if (text == null || text.isEmpty()) {
             return 0;
         }
-        
+
         try {
             int tokenCount = tokenizer.estimateTokenCountInText(text);
             log.debug("Token count estimation: {} tokens for {} characters", tokenCount, text.length());
@@ -144,7 +149,91 @@ public class OpenAILLMService implements LLMService {
             return estimateTokensSimple(text);
         }
     }
-    
+
+    /**
+     * 多轮对话流式调用 LLM
+     *
+     * @param messages 对话消息列表（包含历史上下文）
+     * @param options 调用选项
+     * @return 流式响应
+     */
+    @Override
+    @CircuitBreaker(name = "llmService", fallbackMethod = "streamChatMessagesFallback")
+    @Retryable(
+            value = {LLMApiException.class},
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 1000, multiplier = 2)
+    )
+    public Flux<String> streamChat(List<ChatMessage> messages, LLMOptions options) {
+        log.info("Stream chat with messages, count: {}", messages.size());
+
+        try {
+            return Flux.create(sink -> {
+                streamingChatLanguageModel.generate(
+                    messages,
+                    new StreamingResponseHandler<AiMessage>() {
+                        @Override
+                        public void onNext(String token) {
+                            if (token != null && !token.isEmpty()) {
+                                sink.next(token);
+                            }
+                        }
+
+                        @Override
+                        public void onComplete(Response<AiMessage> response) {
+                            log.info("Stream chat with messages completed");
+                            sink.complete();
+                        }
+
+                        @Override
+                        public void onError(Throwable error) {
+                            log.error("Stream chat with messages error", error);
+                            sink.error(new LLMApiException("Stream chat with messages failed", error));
+                        }
+                    }
+                );
+            });
+
+        } catch (Exception e) {
+            log.error("Failed to initiate stream chat with messages", e);
+            throw new LLMApiException("Failed to initiate stream chat with messages", e);
+        }
+    }
+
+    /**
+     * 多轮对话非流式调用 LLM
+     *
+     * @param messages 对话消息列表（包含历史上下文）
+     * @param options 调用选项
+     * @return 完整响应
+     */
+    @Override
+    @CircuitBreaker(name = "llmService", fallbackMethod = "chatMessagesFallback")
+    @Retryable(
+            value = {LLMApiException.class},
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 1000, multiplier = 2)
+    )
+    public String chat(List<ChatMessage> messages, LLMOptions options) {
+        log.info("Chat with messages, count: {}", messages.size());
+
+        try {
+            Response<AiMessage> response = chatLanguageModel.generate(messages);
+            String responseText = response.content().text();
+
+            if (responseText != null && !responseText.isEmpty()) {
+                log.info("Chat with messages completed, response length: {}", responseText.length());
+                return responseText;
+            }
+
+            throw new LLMApiException("Empty response from LLM");
+
+        } catch (Exception e) {
+            log.error("Chat with messages request failed", e);
+            throw new LLMApiException("Chat with messages request failed", e);
+        }
+    }
+
     /**
      * 简单的 token 估算算法（降级方案）
      * 中文字符：1 字符 ≈ 1.5 token
@@ -153,13 +242,13 @@ public class OpenAILLMService implements LLMService {
     private int estimateTokensSimple(String text) {
         int chineseCount = 0;
         int englishWords = 0;
-        
+
         for (char c : text.toCharArray()) {
             if (c >= 0x4E00 && c <= 0x9FA5) {
                 chineseCount++;
             }
         }
-        
+
         // 估算英文单词数
         String[] words = text.split("\\s+");
         for (String word : words) {
@@ -167,10 +256,10 @@ public class OpenAILLMService implements LLMService {
                 englishWords++;
             }
         }
-        
+
         return (int) (chineseCount * 1.5 + englishWords * 1.3);
     }
-    
+
     /**
      * 流式调用降级方法
      * 当 LLM 服务不可用时返回友好提示
@@ -186,6 +275,22 @@ public class OpenAILLMService implements LLMService {
      */
     private String chatFallback(String prompt, LLMOptions options, Throwable throwable) {
         log.warn("LLM service degraded, using fallback for chat. Error: {}", throwable.getMessage());
+        return "抱歉，AI服务暂时不可用，请稍后再试。";
+    }
+
+    /**
+     * 多轮对话流式调用降级方法
+     */
+    private Flux<String> streamChatMessagesFallback(List<ChatMessage> messages, LLMOptions options, Throwable throwable) {
+        log.warn("LLM service degraded, using fallback for stream chat with messages. Error: {}", throwable.getMessage());
+        return Flux.just("抱歉，AI服务暂时不可用，请稍后再试。");
+    }
+
+    /**
+     * 多轮对话非流式调用降级方法
+     */
+    private String chatMessagesFallback(List<ChatMessage> messages, LLMOptions options, Throwable throwable) {
+        log.warn("LLM service degraded, using fallback for chat with messages. Error: {}", throwable.getMessage());
         return "抱歉，AI服务暂时不可用，请稍后再试。";
     }
 }

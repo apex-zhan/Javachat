@@ -31,6 +31,12 @@
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-open-ai</artifactId>
         </dependency>
+
+        <!-- LangChain4j Ollama for Local LLMs -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-ollama</artifactId>
+        </dependency>
         
         <!-- Spring Retry -->
         <dependency>

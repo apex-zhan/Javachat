@@ -25,14 +25,29 @@ public enum LLMProvider {
     CLAUDE("claude", "Claude"),
     
     /**
-     * 通义千问 (阿里云)
+     * 通义千问 (阿里云 API)
      */
     QWEN("qwen", "Qwen"),
-    
+
+    /**
+     * Qwen2.5-14B (Ollama 本地部署，推荐)
+     */
+    QWEN_OLLAMA("qwen-ollama", "Qwen2.5-14B (Local)"),
+
+    /**
+     * Llama3-70B (Ollama 本地部署，备选)
+     */
+    LLAMA("llama", "Llama3-70B (Local)"),
+
     /**
      * 文心一言 (百度)
      */
-    ERNIE("ernie", "Ernie");
+    ERNIE("ernie", "Ernie"),
+
+    /**
+     * Mock模式（本地测试，无需部署LLM）
+     */
+    MOCK("mock", "Mock (Local Test)");
     
     private final String code;
     private final String name;

@@ -20,11 +20,14 @@
         <module>mallchat-ai-rag</module>
         <module>mallchat-ai-llm</module>
         <module>mallchat-ai-vector</module>
+        <module>mallchat-ai-finetune</module>
     </modules>
 
     <properties>
-        <langchain4j.version>0.27.1</langchain4j.version>
+        <langchain4j.version>0.36.0</langchain4j.version>
+        <langchain4j-spring-boot.version>0.36.0</langchain4j-spring-boot.version>
         <milvus-sdk.version>2.3.4</milvus-sdk.version>
+        <qdrant-java-client.version>1.14.0</qdrant-java-client.version>
         <tika.version>2.9.1</tika.version>
         <jqwik.version>1.7.4</jqwik.version>
         <!--        <junit.version>5.8.2</junit.version>-->
@@ -93,6 +96,20 @@
                 <groupId>io.milvus</groupId>
                 <artifactId>milvus-sdk-java</artifactId>
                 <version>${milvus-sdk.version}</version>
+            </dependency>
+
+            <!-- Qdrant Vector Database -->
+            <dependency>
+                <groupId>io.qdrant</groupId>
+                <artifactId>qdrant-java-client</artifactId>
+                <version>${qdrant-java-client.version}</version>
+            </dependency>
+
+            <!-- LangChain4j Ollama -->
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-ollama</artifactId>
+                <version>${langchain4j.version}</version>
             </dependency>
 
             <!-- Apache Tika for document parsing -->

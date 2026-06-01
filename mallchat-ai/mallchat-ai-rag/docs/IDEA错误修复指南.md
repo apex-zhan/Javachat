@@ -239,4 +239,3 @@ mvn clean install -DskipTests
 |------|---------|------|
 | 2026-02-06 | 修复 JetCacheUtils.create() 参数顺序 | ✅ 完成 |
 | 2026-02-06 | 添加 mallchat-cache-starter 依赖 | ✅ 完成 |
-

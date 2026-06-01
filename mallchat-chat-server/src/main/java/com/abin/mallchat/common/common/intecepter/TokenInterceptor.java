@@ -32,6 +32,9 @@ public class TokenInterceptor implements HandlerInterceptor {
     @Value("${spring.profiles.active:}")
     protected String activeProfile;
 
+    @Value("${mallchat.test.skipLogin:false}")
+    private Boolean skipLogin;
+
     /**
      * 1.拦截器的前置处理方法，用于验证用户登录状态
      * 2.确保每次请求的缓存一致性
@@ -45,13 +48,12 @@ public class TokenInterceptor implements HandlerInterceptor {
     @Override
 
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        // 开发和本地环境直接放行
-//        if ("dev".equals(activeProfile) || "local".equals(activeProfile)) {
-//            // 设置一个默认的测试用户ID
-//            request.setAttribute(ATTRIBUTE_UID, 1L); // 1 是测试用户ID
-//            MDC.put(MDCKey.UID, "1");
-//            return true;
-//        }
+        // 测试环境配置跳过登录（仅开发测试使用）
+        if (Boolean.TRUE.equals(skipLogin)) {
+            request.setAttribute(ATTRIBUTE_UID, 1L);
+            MDC.put(MDCKey.UID, "1");
+            return true;
+        }
         //获取用户登录token
         String token = getToken(request);
         Long validUid = loginService.getValidUid(token); //验证token缓存有效性

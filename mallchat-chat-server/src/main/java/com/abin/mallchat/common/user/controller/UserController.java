@@ -6,12 +6,16 @@ import com.abin.mallchat.common.common.utils.AssertUtil;
 import com.abin.mallchat.common.common.utils.RequestHolder;
 import com.abin.mallchat.common.user.domain.dto.ItemInfoDTO;
 import com.abin.mallchat.common.user.domain.dto.SummeryInfoDTO;
+import com.abin.mallchat.common.user.domain.entity.User;
 import com.abin.mallchat.common.user.domain.enums.RoleEnum;
 import com.abin.mallchat.common.user.domain.vo.request.user.*;
 import com.abin.mallchat.common.user.domain.vo.response.user.BadgeResp;
 import com.abin.mallchat.common.user.domain.vo.response.user.UserInfoResp;
+import com.abin.mallchat.common.user.domain.vo.response.ws.WSLoginSuccess;
 import com.abin.mallchat.common.user.service.IRoleService;
+import com.abin.mallchat.common.user.service.LoginService;
 import com.abin.mallchat.common.user.service.UserService;
+import com.abin.mallchat.common.user.dao.UserDao;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +40,10 @@ public class UserController {
     private UserService userService;
     @Autowired
     private IRoleService iRoleService;
+    @Autowired
+    private LoginService loginService;
+    @Autowired
+    private UserDao userDao;
 
     @GetMapping("/userInfo")
     @ApiOperation("用户详情")
@@ -83,6 +91,25 @@ public class UserController {
         AssertUtil.isTrue(hasPower, "没有权限");
         userService.black(req);
         return ApiResult.success();
+    }
+
+    @GetMapping("/public/testLogin/{uid}")
+    @ApiOperation("测试登录-跳过微信扫码直接获取token（仅开发测试使用）")
+    public ApiResult<WSLoginSuccess> testLogin(@PathVariable Long uid) {
+        User user = userDao.getById(uid);
+        if (user == null) {
+            return ApiResult.fail(400, "用户不存在，请先确保数据库中有该用户");
+        }
+        String token = loginService.login(uid);
+        boolean hasPower = iRoleService.hasPower(uid, RoleEnum.CHAT_MANAGER);
+        WSLoginSuccess resp = WSLoginSuccess.builder()
+                .uid(user.getId())
+                .avatar(user.getAvatar())
+                .token(token)
+                .name(user.getName())
+                .power(hasPower ? 1 : 0)
+                .build();
+        return ApiResult.success(resp);
     }
 }
 

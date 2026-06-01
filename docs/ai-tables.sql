@@ -55,6 +55,7 @@ CREATE TABLE `ai_document_chunk` (
 DROP TABLE IF EXISTS `ai_conversation`;
 CREATE TABLE `ai_conversation` (
   `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '对话ID',
+  `session_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '会话ID（用于多轮对话）',
   `user_id` bigint(20) NOT NULL COMMENT '用户ID',
   `conversation_type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '会话类型（SUMMARY, QA, RAG）',
   `user_input` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户输入',
@@ -77,3 +78,4 @@ CREATE TABLE `ai_conversation` (
 -- ----------------------------
 ALTER TABLE `ai_document_chunk` ADD INDEX `idx_document_chunk`(`document_id`, `chunk_index`) USING BTREE;
 ALTER TABLE `ai_conversation` ADD INDEX `idx_user_conversation`(`user_id`, `create_time`) USING BTREE;
+ALTER TABLE `ai_conversation` ADD INDEX `idx_session_id`(`session_id`) USING BTREE;

@@ -98,16 +98,42 @@ public class ChatServiceImpl implements ChatService {
 
     /**
      * 发送消息
+     * <p>
+     * 优化点：增加幂等校验，防止重复提交
      */
     @Override
     @Transactional
     public Long sendMsg(ChatMessageReq request, Long uid) {
+        // 幂等校验：使用请求中的roomId + body 组合作为幂等键（简化实现）
+        // 生产环境建议使用客户端生成的唯一clientMsgId
+        Object body = request.getBody();
+        String contentStr = body != null ? body.toString() : "empty";
+        String idempotentKey = buildIdempotentKey(uid, request.getRoomId(), contentStr);
+        Boolean success = com.abin.mallchat.common.common.utils.RedisUtils.setnx(idempotentKey, "1", 5 * 60);
+        if (Boolean.FALSE.equals(success)) {
+            log.warn("消息重复提交，uid={}, roomId={}", uid, request.getRoomId());
+            throw new RuntimeException("消息发送中，请勿重复提交");
+        }
+
         check(request, uid);
         AbstractMsgHandler<?> msgHandler = MsgHandlerFactory.getStrategyNoNull(request.getMsgType());
         Long msgId = msgHandler.checkAndSaveMsg(request, uid);
         //发布消息发送事件
         applicationEventPublisher.publishEvent(new MessageSendEvent(this, msgId));
         return msgId;
+    }
+
+    /**
+     * 构建幂等键
+     */
+    private String buildIdempotentKey(Long uid, Long roomId, String content) {
+        String clientMsgId = cn.hutool.core.util.StrUtil.isBlank(content) ? "empty" : content;
+        // 限制长度防止key过长
+        if (clientMsgId.length() > 50) {
+            clientMsgId = clientMsgId.substring(0, 50);
+        }
+        return com.abin.mallchat.common.common.constant.RedisKey.getKey(
+                com.abin.mallchat.common.common.constant.RedisKey.MSG_IDEMPOTENT_STRING, uid, clientMsgId);
     }
 
     /**
@@ -324,6 +350,7 @@ public class ChatServiceImpl implements ChatService {
         AssertUtil.isTrue(between < 2, "覆水难收，超过2分钟的消息不能撤回哦~~");
     }
 
+    @Override
     public List<ChatMessageResp> getMsgRespBatch(List<Message> messages, Long receiveUid) {
         if (CollectionUtil.isEmpty(messages)) {
             return new ArrayList<>();

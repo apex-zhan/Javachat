@@ -69,4 +69,41 @@ public interface WebSocketService {
      */
     void sendToUid(WSBaseResp<?> wsBaseResp, Long uid);
 
+    /**
+     * 处理客户端消息确认(ACK)
+     *
+     * @param channel netty连接
+     * @param ackJson ACK请求JSON
+     */
+    void handleMsgAck(Channel channel, String ackJson);
+
+    /**
+     * 向所有在线连接发送心跳PING
+     */
+    void sendPingToAll();
+
+    /**
+     * 发送心跳PING给指定Channel
+     *
+     * @param channel netty连接
+     */
+    void sendPing(Channel channel);
+
+    /**
+     * 获取指定用户的所有在线Channel
+     *
+     * @param uid 用户ID
+     * @return Channel列表
+     */
+    java.util.List<Channel> getUserChannels(Long uid);
+
+    /**
+     * 根据设备类型获取用户的Channel
+     *
+     * @param uid        用户ID
+     * @param deviceType 设备类型
+     * @return Channel
+     */
+    Channel getUserChannelByDevice(Long uid, Integer deviceType);
+
 }

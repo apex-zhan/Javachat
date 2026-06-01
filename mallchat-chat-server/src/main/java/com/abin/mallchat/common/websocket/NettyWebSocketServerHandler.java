@@ -18,6 +18,11 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Description: Netty WebSocket 服务器处理器
+ * <p>
+ * 优化点：
+ * 1. 支持处理客户端PONG心跳响应
+ * 2. 支持处理客户端MSG_ACK消息确认
+ * 3. 写空闲时触发服务端发送PING心跳
  */
 @Slf4j
 @Sharable //标记该处理器可以被多个通道安全共享使用。在Netty中，被@Sharable注解的ChannelHandler可以在多个ChannelPipeline中被添加而不需要创建新实例，需要确保实现线程安全。
@@ -61,7 +66,7 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
     }
 
     /**
-     * 心跳检查
+     * 心跳检查 & WebSocket握手完成处理
      *
      * @param ctx 指的是 ChannelHandlerContext 上下文对象
      * @param evt 指的是 IdleStateEvent 事件
@@ -75,13 +80,18 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
             // 读空闲，即客户端在指定时间内没有发送任何数据
             if (idleStateEvent.state() == IdleState.READER_IDLE) {
                 // 关闭用户的连接
+                log.warn("客户端读空闲超时，channelId={}", ctx.channel().id());
                 userOffLine(ctx);
+            }
+            // 写空闲，即服务端在指定时间内没有发送任何数据，需要发送PING心跳
+            else if (idleStateEvent.state() == IdleState.WRITER_IDLE) {
+                this.webSocketService.sendPing(ctx.channel());
             }
         } else if (evt instanceof WebSocketServerProtocolHandler.HandshakeComplete) { //WebSocketServerProtocolHandler负责 HTTP 协议升级为 WebSocket 协议
             this.webSocketService.connect(ctx.channel());// 连接成功后，进行授权
             String token = NettyUtil.getAttr(ctx.channel(), NettyUtil.TOKEN);// 从通道中获取token
             if (StrUtil.isNotBlank(token)) {
-                this.webSocketService.authorize(ctx.channel(), new WSAuthorize(token));
+                this.webSocketService.authorize(ctx.channel(), new WSAuthorize(token, null, null));
             }
         }
         //如果不是 IdleStateEvent 或 HandshakeComplete 事件，则调用父类的处理方法
@@ -114,6 +124,20 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
                 log.info("请求二维码 = " + msg.text());
                 break;
             case HEARTBEAT:
+                // 传统心跳包，保留兼容
+                break;
+            case AUTHORIZE:
+                // 处理带deviceType的授权请求
+                WSAuthorize authorize = JSONUtil.toBean(msg.text(), WSAuthorize.class);
+                this.webSocketService.authorize(ctx.channel(), authorize);
+                break;
+            case MSG_ACK:
+                // 处理客户端消息确认
+                this.webSocketService.handleMsgAck(ctx.channel(), msg.text());
+                break;
+            case PONG:
+                // 客户端心跳响应，无需额外处理，读空闲已重置
+                log.debug("收到客户端PONG，channelId={}", ctx.channel().id());
                 break;
             default:
                 log.info("未知类型");

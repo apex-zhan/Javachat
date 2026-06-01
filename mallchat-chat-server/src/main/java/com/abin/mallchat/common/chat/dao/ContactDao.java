@@ -94,8 +94,22 @@ public class ContactDao extends ServiceImpl<ContactMapper, Contact> {
     }
 
     public List<Contact> getByRoomIds(List<Long> roomIds, Long uid) {
+        if (CollectionUtil.isEmpty(roomIds)) {
+            return lambdaQuery()
+                    .eq(Contact::getUid, uid)
+                    .list();
+        }
         return lambdaQuery()
                 .in(Contact::getRoomId, roomIds)
+                .eq(Contact::getUid, uid)
+                .list();
+    }
+
+    /**
+     * 获取用户所有会话
+     */
+    public List<Contact> getByUid(Long uid) {
+        return lambdaQuery()
                 .eq(Contact::getUid, uid)
                 .list();
     }

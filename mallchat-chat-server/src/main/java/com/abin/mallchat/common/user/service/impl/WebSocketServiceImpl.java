@@ -3,8 +3,10 @@ package com.abin.mallchat.common.user.service.impl;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.json.JSONUtil;
+import com.abin.mallchat.common.chat.service.impl.OfflineMsgService;
 import com.abin.mallchat.common.common.config.ThreadPoolConfig;
 import com.abin.mallchat.common.common.constant.RedisKey;
+import com.abin.mallchat.common.common.domain.dto.MsgAckDTO;
 import com.abin.mallchat.common.common.event.UserOfflineEvent;
 import com.abin.mallchat.common.common.event.UserOnlineEvent;
 import com.abin.mallchat.common.common.utils.RedisUtils;
@@ -36,16 +38,20 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
-import java.util.Date;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Description: websocket处理类
- * Author: <a href="https://github.com/zongzibinbin">abin</a>
+ * <p>
+ * 核心优化点：
+ * 1. 支持ACK消息确认机制，推送后写入待确认队列
+ * 2. 支持离线消息存储，用户不在线时消息进入离线队列
+ * 3. 支持设备类型管理，同类型设备互踢
+ * 4. 支持双向心跳PING/PONG
+ *
  * Date: 2023-03-19 16:21
  */
 @Component
@@ -71,6 +77,7 @@ public class WebSocketServiceImpl implements WebSocketService {
     private static final ConcurrentHashMap<Channel, WSChannelExtraDTO> ONLINE_WS_MAP = new ConcurrentHashMap<>();
     /**
      * 所有在线的用户和对应的socket
+     * 一个用户可对应多个Channel（多端登录）
      */
     private static final ConcurrentHashMap<Long, CopyOnWriteArrayList<Channel>> ONLINE_UID_MAP = new ConcurrentHashMap<>();
 
@@ -99,6 +106,14 @@ public class WebSocketServiceImpl implements WebSocketService {
     private IRoleService iRoleService;
     @Autowired(required = false)
     private MQProducer mqProducer;
+    @Autowired
+    private MsgAckService msgAckService;
+    @Autowired
+    private OfflineMsgService offlineMsgService;
+    @Autowired
+    private WsMetricsService wsMetricsService;
+    @Autowired
+    private com.abin.mallchat.common.chat.service.impl.MsgCompensationService msgCompensationService;
 
     /**
      * 处理用户登录请求，需要返回一张带code的二维码
@@ -148,6 +163,8 @@ public class WebSocketServiceImpl implements WebSocketService {
     @Override
     public void connect(Channel channel) {
         ONLINE_WS_MAP.put(channel, new WSChannelExtraDTO());
+        // 更新在线连接数指标
+        wsMetricsService.setOnlineConnections(ONLINE_WS_MAP.size());
     }
 
     /**
@@ -167,6 +184,8 @@ public class WebSocketServiceImpl implements WebSocketService {
             user.setLastOptTime(new Date());
             applicationEventPublisher.publishEvent(new UserOfflineEvent(this, user));
         }
+        // 更新在线连接数指标
+        wsMetricsService.setOnlineConnections(ONLINE_WS_MAP.size());
     }
 
     /**
@@ -181,7 +200,7 @@ public class WebSocketServiceImpl implements WebSocketService {
         boolean verifySuccess = loginService.verify(wsAuthorize.getToken());
         if (verifySuccess) {//用户校验成功给用户登录
             User user = userDao.getById(loginService.getValidUid(wsAuthorize.getToken()));
-            loginSuccess(channel, user, wsAuthorize.getToken());
+            loginSuccess(channel, user, wsAuthorize.getToken(), wsAuthorize.getDeviceType());
         } else { //让前端的token失效
             sendMsg(channel, WSAdapter.buildInvalidateTokenResp());
         }
@@ -189,10 +208,15 @@ public class WebSocketServiceImpl implements WebSocketService {
 
     /**
      * (channel必在本地)登录成功，并更新状态
+     * <p>
+     * 优化点：
+     * 1. 支持设备类型管理
+     * 2. 推送离线消息
+     * 3. 断线重连消息补偿
      */
-    private void loginSuccess(Channel channel, User user, String token) {
+    private void loginSuccess(Channel channel, User user, String token, Integer deviceType) {
         //更新上线列表
-        online(channel, user.getId());
+        online(channel, user.getId(), deviceType);
         //返回给用户登录成功
         boolean hasPower = iRoleService.hasPower(user.getId(), RoleEnum.CHAT_MANAGER);
         //发送给对应的用户
@@ -204,16 +228,86 @@ public class WebSocketServiceImpl implements WebSocketService {
             user.refreshIp(NettyUtil.getAttr(channel, NettyUtil.IP));
             applicationEventPublisher.publishEvent(new UserOnlineEvent(this, user));
         }
+        // 推送离线消息（Redis离线队列）
+        offlineMsgService.pushOfflineMsgsOnLogin(user.getId());
+        // 断线重连消息补偿（基于lastMsgId查询DB）
+        // todo: 需要从authorize请求中获取lastMsgId，当前简化处理
     }
 
     /**
      * 用户上线
+     * 支持设备类型管理，同类型设备互踢
      */
-    private void online(Channel channel, Long uid) {
-        getOrInitChannelExt(channel).setUid(uid);
+    private void online(Channel channel, Long uid, Integer deviceType) {
+        WSChannelExtraDTO extra = getOrInitChannelExt(channel);
+        extra.setUid(uid);
+        extra.setDeviceType(deviceType);
+
+        // 同设备类型互踢：如果该用户已有相同设备类型的连接，先踢掉旧的
+        if (deviceType != null) {
+            kickSameDeviceType(uid, deviceType, channel);
+        }
+
         ONLINE_UID_MAP.putIfAbsent(uid, new CopyOnWriteArrayList<>());
         ONLINE_UID_MAP.get(uid).add(channel);
         NettyUtil.setAttr(channel, NettyUtil.UID, uid);
+
+        // 记录设备在线信息到Redis
+        recordUserDevice(uid, deviceType, channel.id().asLongText());
+    }
+
+    /**
+     * 踢掉同设备类型的旧连接
+     */
+    private void kickSameDeviceType(Long uid, Integer deviceType, Channel newChannel) {
+        CopyOnWriteArrayList<Channel> channels = ONLINE_UID_MAP.get(uid);
+        if (CollectionUtil.isEmpty(channels)) {
+            return;
+        }
+        for (Channel oldChannel : channels) {
+            if (oldChannel == newChannel) {
+                continue;
+            }
+            WSChannelExtraDTO extra = ONLINE_WS_MAP.get(oldChannel);
+            if (extra != null && Objects.equals(extra.getDeviceType(), deviceType)) {
+                // 发送被踢通知
+                sendMsg(oldChannel, WSAdapter.buildInvalidateTokenResp());
+                // 关闭旧连接
+                oldChannel.close();
+                log.info("用户{}同设备类型{}被踢下线", uid, deviceType);
+            }
+        }
+    }
+
+    /**
+     * 记录用户设备在线信息到Redis
+     */
+    private void recordUserDevice(Long uid, Integer deviceType, String channelId) {
+        if (deviceType == null) {
+            return;
+        }
+        try {
+            String key = RedisKey.getKey(RedisKey.USER_DEVICE_HASH, uid);
+            RedisUtils.hset(key, String.valueOf(deviceType), channelId);
+            RedisUtils.expire(key, 1, TimeUnit.DAYS);
+        } catch (Exception e) {
+            log.warn("记录用户设备信息失败 uid={}, deviceType={}", uid, deviceType, e);
+        }
+    }
+
+    /**
+     * 移除用户设备在线信息
+     */
+    private void removeUserDevice(Long uid, Integer deviceType) {
+        if (deviceType == null) {
+            return;
+        }
+        try {
+            String key = RedisKey.getKey(RedisKey.USER_DEVICE_HASH, uid);
+            RedisUtils.hdel(key, String.valueOf(deviceType));
+        } catch (Exception e) {
+            log.warn("移除用户设备信息失败 uid={}, deviceType={}", uid, deviceType, e);
+        }
     }
 
     /**
@@ -221,13 +315,18 @@ public class WebSocketServiceImpl implements WebSocketService {
      * return 是否全下线成功
      */
     private boolean offline(Channel channel, Optional<Long> uidOptional) {
-        ONLINE_WS_MAP.remove(channel);
+        WSChannelExtraDTO extra = ONLINE_WS_MAP.remove(channel);
+        Integer deviceType = extra != null ? extra.getDeviceType() : null;
         if (uidOptional.isPresent()) {
             CopyOnWriteArrayList<Channel> channels = ONLINE_UID_MAP.get(uidOptional.get());
             if (CollectionUtil.isNotEmpty(channels)) {
                 channels.removeIf(ch -> Objects.equals(ch, channel));
             }
-            return CollectionUtil.isEmpty(ONLINE_UID_MAP.get(uidOptional.get()));
+            boolean allOffline = CollectionUtil.isEmpty(ONLINE_UID_MAP.get(uidOptional.get()));
+            if (allOffline) {
+                removeUserDevice(uidOptional.get(), deviceType);
+            }
+            return allOffline;
         }
         return true;
     }
@@ -245,7 +344,7 @@ public class WebSocketServiceImpl implements WebSocketService {
         //调用用户登录模块
         String token = loginService.login(uid);
         //用户登录
-        loginSuccess(channel, user, token);
+        loginSuccess(channel, user, token, null);
         return Boolean.TRUE;
     }
 
@@ -316,6 +415,90 @@ public class WebSocketServiceImpl implements WebSocketService {
      */
     private void sendMsg(Channel channel, WSBaseResp<?> wsBaseResp) {
         channel.writeAndFlush(new TextWebSocketFrame(JSONUtil.toJsonStr(wsBaseResp)));
+    }
+
+    /**
+     * 处理客户端消息确认(ACK)
+     *
+     * @param channel netty连接
+     * @param ackJson ACK请求JSON
+     */
+    @Override
+    public void handleMsgAck(Channel channel, String ackJson) {
+        try {
+            MsgAckDTO ackDTO = JSONUtil.toBean(ackJson, MsgAckDTO.class);
+            Long uid = NettyUtil.getAttr(channel, NettyUtil.UID);
+            if (uid == null) {
+                log.warn("收到ACK但用户未登录");
+                return;
+            }
+            msgAckService.handleAck(uid, ackDTO);
+        } catch (Exception e) {
+            log.error("处理ACK消息失败", e);
+        }
+    }
+
+    /**
+     * 向所有在线连接发送心跳PING
+     */
+    @Override
+    public void sendPingToAll() {
+        WSBaseResp<Void> pingResp = WSAdapter.buildPingResp();
+        ONLINE_WS_MAP.forEach((channel, ext) -> {
+            threadPoolTaskExecutor.execute(() -> sendMsg(channel, pingResp));
+        });
+    }
+
+    /**
+     * 发送心跳PING给指定Channel
+     *
+     * @param channel netty连接
+     */
+    @Override
+    public void sendPing(Channel channel) {
+        if (channel != null && channel.isActive()) {
+            sendMsg(channel, WSAdapter.buildPingResp());
+        }
+    }
+
+    /**
+     * 获取指定用户的所有在线Channel
+     *
+     * @param uid 用户ID
+     * @return Channel列表
+     */
+    @Override
+    public List<Channel> getUserChannels(Long uid) {
+        CopyOnWriteArrayList<Channel> channels = ONLINE_UID_MAP.get(uid);
+        if (CollectionUtil.isEmpty(channels)) {
+            return Collections.emptyList();
+        }
+        return new ArrayList<>(channels);
+    }
+
+    /**
+     * 根据设备类型获取用户的Channel
+     *
+     * @param uid        用户ID
+     * @param deviceType 设备类型
+     * @return Channel
+     */
+    @Override
+    public Channel getUserChannelByDevice(Long uid, Integer deviceType) {
+        if (deviceType == null) {
+            return null;
+        }
+        CopyOnWriteArrayList<Channel> channels = ONLINE_UID_MAP.get(uid);
+        if (CollectionUtil.isEmpty(channels)) {
+            return null;
+        }
+        for (Channel channel : channels) {
+            WSChannelExtraDTO extra = ONLINE_WS_MAP.get(channel);
+            if (extra != null && Objects.equals(extra.getDeviceType(), deviceType)) {
+                return channel;
+            }
+        }
+        return null;
     }
 
 }

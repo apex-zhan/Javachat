@@ -28,6 +28,8 @@ public enum WSRespTypeEnum {
     RECALL(9, "消息撤回", WSMsgRecall.class),
     APPLY(10, "好友申请", WSFriendApply.class),
     MEMBER_CHANGE(11, "成员变动", WSMemberChange.class),
+    PING(12, "心跳请求", null),
+    OFFLINE_MSG_SYNC(13, "离线消息同步", WSOfflineMsgSync.class),
     ;
 
     private final Integer type;

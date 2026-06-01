@@ -1,0 +1,84 @@
+# 数据卷定义：持久化各组件数据，删除容器后数据不丢失
+volumes:
+  mysql-data:
+  redis-data:
+  rocketmq-namesrv-data:
+  rocketmq-broker-data:
+  rocketmq-broker-log:
+  minio-data:
+
+# 服务定义：mallchat 核心依赖组件（MySQL 5.7 + Redis 6.2 + RocketMQ 4.9.4 + MinIO 稳定版）
+services:
+  # 1. MySQL 5.7.44（稳定版，支持 SQL 自动导入）
+  mysql:
+    image: mysql:5.7.44
+    container_name: mallchat-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456  # 与 Shell 脚本健康检查密码一致
+      MYSQL_DATABASE: mallchat         # 自动创建默认业务数据库
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql                  # 数据持久化卷
+      - ./docs:/docker-entrypoint-initdb.d         # 挂载 SQL 目录，自动导入 mallchat.sql/ai-tables.sql
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+
+  # 2. Redis 6.2.14（稳定版，开启 AOF 持久化）
+  redis:
+    image: redis:6.2.14
+    container_name: mallchat-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data  # 数据持久化卷
+    command: redis-server --appendonly yes  # 开启 AOF 持久化，避免缓存丢失
+
+  # 3. RocketMQ 4.9.4（稳定版，NameServer + Broker 分离部署）
+  rocketmq-namesrv:
+    image: apache/rocketmq:4.9.4
+    container_name: mallchat-rocketmq-namesrv
+    restart: always
+    ports:
+      - "9876:9876"
+    volumes:
+      - rocketmq-namesrv-data:/home/rocketmq/store  # NameServer 数据卷
+    command: sh mqnamesrv
+
+  rocketmq-broker:
+    image: apache/rocketmq:4.9.4
+    container_name: mallchat-rocketmq-broker
+    restart: always
+    depends_on:
+      - rocketmq-namesrv  # 依赖 NameServer，确保先启动 NameServer
+    ports:
+      - "10911:10911"
+      - "10909:10909"
+    volumes:
+      - rocketmq-broker-data:/home/rocketmq/store  # Broker 数据卷
+      - rocketmq-broker-log:/home/rocketmq/logs    # Broker 日志卷
+      - ./rocketmq/data/broker/conf:/home/rocketmq/conf  # 挂载 Broker 自定义配置（支持 IP 替换）
+    environment:
+      - NAMESRV_ADDR=rocketmq-namesrv:9876  # 指向容器内 NameServer 地址
+    command: sh mqbroker -c /home/rocketmq/conf/broker.conf
+
+  # 4. MinIO 稳定版（对象存储，支持 oss.enabled=true）
+  minio:
+    image: minio/minio:RELEASE.2023-10-07T15-07-38Z
+    container_name: mallchat-minio
+    restart: always
+    environment:
+      MINIO_ROOT_USER: minioadmin        # 控制台登录账号
+      MINIO_ROOT_PASSWORD: minioadmin123 # 控制台登录密码（与 Shell 脚本输出一致）
+    ports:
+      - "9000:9000"  # API 端口（业务调用）
+      - "9001:9001"  # 控制台端口（浏览器访问）
+    volumes:
+      - minio-data:/data  # 存储数据持久化卷
+    command: server /data --console-address ":9001"  # 启动并暴露控制台端口

@@ -16,4 +16,10 @@ public class WSBaseResp<T> {
      */
     private Integer type;
     private T data;
+
+    /**
+     * 单次投递唯一标识，用于ACK消息确认机制
+     * 服务端生成，客户端收到消息后需原样回传
+     */
+    private String deliveryId;
 }

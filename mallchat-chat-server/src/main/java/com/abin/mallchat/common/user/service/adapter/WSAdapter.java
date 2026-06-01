@@ -216,4 +216,28 @@ public class WSAdapter {
         wsBaseResp.setData(resp);
         return wsBaseResp;
     }
+
+    /**
+     * 构建心跳PING响应
+     *
+     * @return
+     */
+    public static WSBaseResp<Void> buildPingResp() {
+        WSBaseResp<Void> wsBaseResp = new WSBaseResp<>();
+        wsBaseResp.setType(WSRespTypeEnum.PING.getType());
+        return wsBaseResp;
+    }
+
+    /**
+     * 构建离线消息同步响应
+     *
+     * @param resp
+     * @return
+     */
+    public static WSBaseResp<WSOfflineMsgSync> buildOfflineMsgSync(WSOfflineMsgSync resp) {
+        WSBaseResp<WSOfflineMsgSync> wsBaseResp = new WSBaseResp<>();
+        wsBaseResp.setType(WSRespTypeEnum.OFFLINE_MSG_SYNC.getType());
+        wsBaseResp.setData(resp);
+        return wsBaseResp;
+    }
 }

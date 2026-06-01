@@ -19,6 +19,8 @@ public enum WSReqTypeEnum {
     LOGIN(1, "请求登录二维码"),
     HEARTBEAT(2, "心跳包"),
     AUTHORIZE(3, "登录认证"),
+    MSG_ACK(4, "消息确认"),
+    PONG(5, "心跳响应"),
     ;
 
     private final Integer type;

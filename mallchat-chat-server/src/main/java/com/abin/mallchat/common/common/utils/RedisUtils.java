@@ -357,6 +357,24 @@ public class RedisUtils {
         }
     }
 
+    /**
+     * 仅在key不存在时设置缓存
+     *
+     * @param key   键
+     * @param value 值
+     * @param time  时间(秒)
+     * @return true成功（key不存在且设置成功） false失败（key已存在或设置失败）
+     */
+    public static Boolean setnx(String key, Object value, long time) {
+        try {
+            Boolean success = stringRedisTemplate.opsForValue().setIfAbsent(key, objToStr(value), time, TimeUnit.SECONDS);
+            return Boolean.TRUE.equals(success);
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            return false;
+        }
+    }
+
     // ================================Map=================================
 
     /**
@@ -758,6 +776,24 @@ public class RedisUtils {
     public static Boolean lUpdateIndex(String key, long index, Object value) {
         try {
             stringRedisTemplate.opsForList().set(key, index, objToStr(value));
+            return true;
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * 修剪列表，只保留指定范围内的元素
+     *
+     * @param key   键
+     * @param start 开始索引
+     * @param end   结束索引
+     * @return 是否成功
+     */
+    public static Boolean lTrim(String key, long start, long end) {
+        try {
+            stringRedisTemplate.opsForList().trim(key, start, end);
             return true;
         } catch (Exception e) {
             log.error(e.getMessage(), e);

@@ -74,6 +74,32 @@ public class RedisKey {
      */
     public static final String USER_GLM2_TIME_LAST = "userGLM2UseTime:uid_%d";
 
+    /**
+     * 用户设备在线记录（Redis Hash）
+     * field = deviceType, value = channelId
+     */
+    public static final String USER_DEVICE_HASH = "userDevice:uid_%d";
+
+    /**
+     * 用户离线消息列表
+     */
+    public static final String OFFLINE_MSG_LIST = "offlineMsg:uid_%d";
+
+    /**
+     * 消息ACK等待队列（Redis ZSet，score=下次重试时间）
+     */
+    public static final String MSG_ACK_WAIT_ZET = "msgAckWait:uid_%d";
+
+    /**
+     * 消息ACK已完成集合（Redis Set，防重复确认）
+     */
+    public static final String MSG_ACK_DONE_SET = "msgAckDone:uid_%d";
+
+    /**
+     * 消息发送幂等键
+     */
+    public static final String MSG_IDEMPOTENT_STRING = "msgIdempotent:uid_%d:content_%s";
+
     public static String getKey(String key, Object... objects) {
         return BASE_KEY + String.format(key, objects);
     }

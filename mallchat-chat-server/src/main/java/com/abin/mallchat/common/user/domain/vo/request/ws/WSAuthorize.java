@@ -16,4 +16,14 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class WSAuthorize {
     private String token;
+
+    /**
+     * 设备类型：1-PC, 2-APP, 3-WEB
+     */
+    private Integer deviceType;
+
+    /**
+     * 客户端最后一条消息ID，用于断线重连补偿
+     */
+    private Long lastMsgId;
 }

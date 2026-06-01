@@ -19,4 +19,9 @@ public class WSChannelExtraDTO {
      * 前端如果登录了，记录uid
      */
     private Long uid;
+
+    /**
+     * 设备类型：1-PC, 2-APP, 3-WEB
+     */
+    private Integer deviceType;
 }

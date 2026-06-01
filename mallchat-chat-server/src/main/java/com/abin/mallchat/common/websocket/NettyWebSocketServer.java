@@ -27,6 +27,10 @@ import javax.annotation.PreDestroy;
  * NettyWebSocketServer 类的主要作用是使用 Netty 框架搭建一个 WebSocket 服务器，
  * 处理客户端的连接请求，将 HTTP 协议升级为 WebSocket 协议，并通过自定义的处理器处理 WebSocket 消息和业务逻辑。
  * 同时，它还负责在服务器关闭时优雅地释放资源。
+ * <p>
+ * 优化点：启用双向心跳检测
+ * - 读空闲 35 秒：客户端未发送任何数据（含PONG），关闭连接
+ * - 写空闲 25 秒：服务端未发送任何数据，触发发送PING心跳
  */
 @Slf4j
 @Configuration
@@ -77,8 +81,9 @@ public class NettyWebSocketServer {
                     @Override
                     protected void initChannel(SocketChannel socketChannel) throws Exception {
                         ChannelPipeline pipeline = socketChannel.pipeline();
-                        // 30秒客户端没有向服务器发送心跳则关闭连接（todo本地测试最好注释）
-                        // pipeline.addLast(new IdleStateHandler(30, 0, 0));
+                        // 35秒客户端没有向服务器发送任何数据则关闭连接（读空闲）
+                        // 25秒服务器没有向客户端发送任何数据则触发写空闲事件（发送PING）
+                        pipeline.addLast(new IdleStateHandler(35, 25, 0));
                         // 因为使用http协议，所以需要使用http的编码器，解码器
                         pipeline.addLast(new HttpServerCodec());
                         // 以块方式写，添加 chunkedWriter 处理器

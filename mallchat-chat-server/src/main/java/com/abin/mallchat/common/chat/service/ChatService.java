@@ -77,4 +77,13 @@ public interface ChatService {
     CursorPageBaseResp<ChatMessageReadResp> getReadPage(Long uid, ChatMessageReadReq request);
 
     void msgRead(Long uid, ChatMessageMemberReq request);
+
+    /**
+     * 批量获取消息前端展示的物料
+     *
+     * @param messages   消息列表
+     * @param receiveUid 接受消息的uid，可null
+     * @return 消息响应列表
+     */
+    List<ChatMessageResp> getMsgRespBatch(List<Message> messages, Long receiveUid);
 }

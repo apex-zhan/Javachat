@@ -2,11 +2,11 @@
 
 ## 📋 文档信息
 
-- **版本**：v1.0
+- **版本**：v1.1
 - **创建时间**：2026-05-28
-- **最后更新**：2026-05-28
-- **作者**：Kiro
-- **状态**：✅ 已完成
+- **最后更新**：2026-06-13
+- **作者**：Kiro / AI Assistant
+- **状态**：✅ 已随代码迁移到 Ollama 方案更新
 
 ---
 
@@ -20,12 +20,22 @@
 
 ### 当前配置
 
-| 配置项 | 值 |
-|--------|-----|
-| 模型名称 | bge-large-zh-v1.5 |
-| 向量维度 | 1024 |
-| 部署方式 | 本地部署（Ollama/vLLM） |
-| API 协议 | OpenAI 兼容 API |
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| 模型名称 | bge-large-zh-v1.5 | 推荐模型 |
+| 向量维度 | 1024 | bge-large-zh-v1.5 |
+| 备选模型 | m3e-base | 768 维，资源受限场景 |
+| 部署方式 | 本地部署（Ollama） | 推荐 |
+| 框架 | LangChain4j 0.36.0 | Java 集成 |
+
+### 实现列表
+
+| 实现类 | 模型 | 维度 | 启用条件 |
+|--------|------|------|----------|
+| `OllamaBgeEmbeddingService` | bge-large-zh-v1.5 | 1024 | `embedding.provider=bge`（默认，非 mock） |
+| `M3eEmbeddingService` | m3e-base | 768 | `embedding.provider=m3e` |
+| `OpenAIEmbeddingService` | OpenAI 兼容模型 | 可配置 | `embedding.provider=openai` |
+| `MockEmbeddingService` | 确定性伪随机向量 | 1024（默认） | `spring.profiles.active=mock` |
 
 ### 选型分析
 
@@ -35,7 +45,7 @@
 |------|------|------|
 | 中文效果 | 专为中文语料训练，语义检索效果优秀 | ⭐⭐⭐⭐⭐ |
 | 向量维度 | 1024 维，在效果和效率间取得平衡 | ⭐⭐⭐⭐⭐ |
-| 本地部署 | 支持 Ollama、vLLM 等主流框架 | ⭐⭐⭐⭐⭐ |
+| 本地部署 | 支持 Ollama 一键部署 | ⭐⭐⭐⭐⭐ |
 | 成本 | 开源免费，无 API 调用费用 | ⭐⭐⭐⭐⭐ |
 | 社区支持 | 活跃的开源社区，持续更新 | ⭐⭐⭐⭐ |
 
@@ -43,21 +53,21 @@
 
 | 模型 | 维度 | 中文效果 | 本地部署 | 成本 | 推荐场景 |
 |------|------|---------|---------|------|----------|
-| **bge-large-zh-v1.5** | 1024 | ⭐⭐⭐⭐⭐ | ✅ | 免费 | **中文 RAG 系统** |
+| **bge-large-zh-v1.5** | 1024 | ⭐⭐⭐⭐⭐ | ✅ | 免费 | **中文 RAG 系统（推荐）** |
+| m3e-base | 768 | ⭐⭐⭐⭐ | ✅ | 免费 | 资源受限场景 |
 | bge-m3 | 1024 | ⭐⭐⭐⭐ | ✅ | 免费 | 多语言场景 |
 | bge-small-zh | 512 | ⭐⭐⭐ | ✅ | 免费 | 资源受限场景 |
-| m3e-large | 1024 | ⭐⭐⭐⭐ | ✅ | 免费 | 通用中文场景 |
 | text-embedding-ada-002 | 1536 | ⭐⭐⭐ | ❌ | 收费 | OpenAI 生态 |
 | text-embedding-3-small | 1536 | ⭐⭐⭐⭐ | ❌ | 收费 | OpenAI 生态 |
 | text-embedding-3-large | 3072 | ⭐⭐⭐⭐⭐ | ❌ | 收费 | 高精度需求 |
 
 ### 为什么选择 bge-large-zh-v1.5
 
-1. **中文优化**：MallChat 是中文客服系统，bge-large-zh-v1.5 专为中文设计
+1. **中文优化**：MallChat 是中文系统，bge-large-zh-v1.5 专为中文设计
 2. **成本优势**：本地部署无 API 调用费用，适合生产环境
 3. **效果优秀**：在 MTEB 中文检索任务中排名前列
 4. **效率平衡**：1024 维度在检索精度和存储/计算成本间取得平衡
-5. **部署灵活**：支持多种本地部署方案
+5. **部署灵活**：支持 Ollama 一键部署
 
 ---
 
@@ -65,42 +75,114 @@
 
 ### 配置文件
 
-配置文件位置：`mallchat-chat-server/src/main/resources/application-ai.yml`
+配置文件位置：`mallchat-chat-server/src/main/resources/application-ai.yml` 或 `application-local.yml`
 
 ```yaml
-langchain4j:
-  openai:
-    # API Key（本地部署时可为任意值）
-    api-key: ${OPENAI_API_KEY:ollama}
-    # API Base URL（本地部署地址）
-    base-url: ${OPENAI_BASE_URL:http://localhost:11434/v1}
-    
-    # Embedding Model 配置
-    embedding-model:
-      # 模型名称
-      model-name: bge-large-zh-v1.5
-      # 向量维度
-      dimensions: 1024
+# ==================== Embedding 配置 ====================
+embedding:
+  provider: bge   # 推荐: bge | 备选: m3e | 兼容: openai | mock
+
+ollama:
+  base-url: http://localhost:11434
+  embedding-model: bge-large-zh-v1.5
+  timeout: 60s
+  max-retries: 3
 ```
 
-### Milvus 向量库配置
+### OllamaBgeEmbeddingService 配置项
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `ollama.base-url` | `http://localhost:11434` | Ollama 服务地址 |
+| `ollama.embedding-model` | `bge-large-zh-v1.5` | Embedding 模型名称 |
+| `ollama.timeout` | `60s` | 请求超时 |
+| `ollama.max-retries` | `3` | 最大重试次数 |
+
+### M3eEmbeddingService 配置
 
 ```yaml
+embedding:
+  provider: m3e
+
+ollama:
+  base-url: http://localhost:11434
+  embedding-model: m3e
+  timeout: 60s
+  max-retries: 3
+```
+
+### OpenAI Embedding 兼容配置
+
+```yaml
+embedding:
+  provider: openai
+
+langchain4j:
+  openai:
+    api-key: sk-xxx
+    base-url: https://api.openai.com/v1
+    embedding-model:
+      model-name: text-embedding-3-large
+```
+
+### Mock 模式配置
+
+```yaml
+spring:
+  profiles:
+    active: mock
+
+embedding:
+  provider: mock
+```
+
+### 向量库配置
+
+#### Qdrant（推荐，动态向量）
+
+```yaml
+vector:
+  store:
+    provider: qdrant
+
+qdrant:
+  host: localhost
+  port: 6334
+  collection-name: mallchat_knowledge
+  grpc-timeout: 30
+  use-tls: false
+```
+
+**注意**：Qdrant 支持动态向量，切换 bge(1024) / m3e(768) 无需重建 Collection。
+
+#### Milvus（备选，固定维度）
+
+```yaml
+vector:
+  store:
+    provider: milvus
+
 milvus:
+  host: localhost
+  port: 19530
+  database: default
   collection:
     name: mallchat_knowledge_vectors
     # 向量维度必须与 Embedding 模型一致
     dimension: 1024
-    # 相似度度量类型（推荐 COSINE）
     metric-type: COSINE
 ```
+
+**注意**：Milvus 需要固定维度，切换模型时必须重建 Collection。
 
 ### 环境变量配置
 
 | 环境变量 | 说明 | 默认值 |
 |----------|------|--------|
-| OPENAI_API_KEY | API 密钥 | ollama |
-| OPENAI_BASE_URL | API 基础 URL | http://localhost:11434/v1 |
+| `OLLAMA_BASE_URL` | Ollama 服务地址 | `http://localhost:11434` |
+| `QDRANT_HOST` | Qdrant 主机 | `localhost` |
+| `QDRANT_PORT` | Qdrant gRPC 端口 | `6334` |
+| `OPENAI_API_KEY` | OpenAI API 密钥 | - |
 
 ---
 
@@ -124,6 +206,9 @@ curl -fsSL https://ollama.com/install.sh | sh
 # 拉取 bge-large-zh-v1.5 模型
 ollama pull bge-large-zh-v1.5
 
+# 拉取 m3e-base 模型（备选）
+ollama pull m3e
+
 # 验证模型
 ollama list
 ```
@@ -141,87 +226,39 @@ curl http://localhost:11434/api/tags
 #### 4. 测试 Embedding
 
 ```bash
-curl http://localhost:11434/v1/embeddings \
+curl http://localhost:11434/api/embeddings \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer ollama" \
   -d '{
     "model": "bge-large-zh-v1.5",
-    "input": "这是一段测试文本"
+    "prompt": "这是一段测试文本"
   }'
 ```
 
 #### 5. 应用配置
 
 ```yaml
-langchain4j:
-  openai:
-    api-key: ollama
-    base-url: http://localhost:11434/v1
-    embedding-model:
-      model-name: bge-large-zh-v1.5
-      dimensions: 1024
+embedding:
+  provider: bge
+
+ollama:
+  base-url: http://localhost:11434
+  embedding-model: bge-large-zh-v1.5
+  timeout: 60s
+  max-retries: 3
 ```
 
-### 方案二：vLLM 部署
-
-#### 1. 安装 vLLM
-
-```bash
-pip install vllm
-```
-
-#### 2. 下载模型
-
-```bash
-# 从 HuggingFace 下载模型
-huggingface-cli download BAAI/bge-large-zh-v1.5 --local-dir ./bge-large-zh-v1.5
-```
-
-#### 3. 启动服务
-
-```bash
-vllm serve BAAI/bge-large-zh-v1.5 \
-  --port 8000 \
-  --trust-remote-code
-```
-
-#### 4. 测试 Embedding
-
-```bash
-curl http://localhost:8000/v1/embeddings \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer EMPTY" \
-  -d '{
-    "model": "BAAI/bge-large-zh-v1.5",
-    "input": "这是一段测试文本"
-  }'
-```
-
-#### 5. 应用配置
-
-```yaml
-langchain4j:
-  openai:
-    api-key: EMPTY
-    base-url: http://localhost:8000/v1
-    embedding-model:
-      model-name: BAAI/bge-large-zh-v1.5
-      dimensions: 1024
-```
-
-### 方案三：Docker 部署
-
-#### Ollama Docker
+### 方案二：Docker 部署 Ollama
 
 ```bash
 # 拉取镜像
 docker pull ollama/ollama
 
-# 启动容器
+# 启动容器（GPU）
 docker run -d \
   --name ollama \
   -p 11434:11434 \
   -v ollama_data:/root/.ollama \
+  --gpus all \
   ollama/ollama
 
 # 进入容器拉取模型
@@ -239,7 +276,7 @@ public interface EmbeddingService {
     /**
      * 生成单个文本的向量
      * @param text 文本内容
-     * @return 向量数组（1024 维）
+     * @return 向量数组（1024 维或 768 维）
      */
     float[] generateEmbedding(String text);
     
@@ -252,40 +289,45 @@ public interface EmbeddingService {
 }
 ```
 
-### 服务实现
+### OllamaBgeEmbeddingService 实现
 
 ```java
 @Slf4j
 @Service
-public class OpenAIEmbeddingService implements EmbeddingService {
-    
-    @Value("${langchain4j.openai.embedding-model.model-name:bge-large-zh-v1.5}")
+@Profile("!mock")
+@ConditionalOnProperty(name = "embedding.provider", havingValue = "bge", matchIfMissing = true)
+public class OllamaBgeEmbeddingService implements EmbeddingService {
+
+    @Value("${ollama.base-url:http://localhost:11434}")
+    private String baseUrl;
+
+    @Value("${ollama.embedding-model:bge-large-zh-v1.5}")
     private String modelName;
-    
-    @Value("${langchain4j.openai.embedding-model.dimensions:1024}")
-    private Integer dimensions;
-    
+
+    @Value("${ollama.timeout:60s}")
+    private Duration timeout;
+
+    @Value("${ollama.max-retries:3}")
+    private Integer maxRetries;
+
     private EmbeddingModel embeddingModel;
-    
+
     @PostConstruct
     public void init() {
-        log.info("Initializing Embedding Model: {}, dimensions: {}", modelName, dimensions);
-        
-        this.embeddingModel = OpenAiEmbeddingModel.builder()
-                .apiKey(apiKey)
+        this.embeddingModel = OllamaEmbeddingModel.builder()
                 .baseUrl(baseUrl)
                 .modelName(modelName)
                 .timeout(timeout)
                 .maxRetries(maxRetries)
                 .build();
     }
-    
+
     @Override
     public float[] generateEmbedding(String text) {
         Response<Embedding> response = embeddingModel.embed(text);
         return response.content().vector();
     }
-    
+
     @Override
     public List<float[]> generateEmbeddings(List<String> texts) {
         List<TextSegment> segments = texts.stream()
@@ -297,6 +339,40 @@ public class OpenAIEmbeddingService implements EmbeddingService {
         return response.content().stream()
                 .map(Embedding::vector)
                 .collect(Collectors.toList());
+    }
+}
+```
+
+### MockEmbeddingService 实现
+
+```java
+@Slf4j
+@Service
+@Profile("mock")
+public class MockEmbeddingService implements EmbeddingService {
+
+    private static final int DEFAULT_DIMENSION = 1024;
+
+    @Override
+    public float[] generateEmbedding(String text) {
+        return generateDeterministicVector(text, DEFAULT_DIMENSION);
+    }
+
+    @Override
+    public List<float[]> generateEmbeddings(List<String> texts) {
+        return texts.stream()
+                .map(this::generateEmbedding)
+                .collect(Collectors.toList());
+    }
+
+    private float[] generateDeterministicVector(String text, int dimension) {
+        // 基于 MD5 生成确定性伪随机向量
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        byte[] hash = md.digest(text.getBytes(StandardCharsets.UTF_8));
+        
+        float[] vector = new float[dimension];
+        // ... L2 归一化
+        return vector;
     }
 }
 ```
@@ -315,14 +391,22 @@ public class OpenAIEmbeddingService implements EmbeddingService {
 | 模型大小 | ~1.3GB | FP16 精度 |
 | MTEB 中文检索排名 | Top 5 | C-MTEB 榜单 |
 
+### m3e-base 性能数据
+
+| 指标 | 数值 | 说明 |
+|------|------|------|
+| 向量维度 | 768 | 存储空间约 3KB/向量 |
+| 推理速度 | ~10ms/文本 | GPU 环境（RTX 3090） |
+| 模型大小 | ~400MB | FP16 精度 |
+
 ### 存储估算
 
-| 文档数量 | 分块数量（平均 10/文档） | 向量存储空间 |
-|----------|-------------------------|--------------|
-| 1,000 | 10,000 | ~40MB |
-| 10,000 | 100,000 | ~400MB |
-| 100,000 | 1,000,000 | ~4GB |
-| 1,000,000 | 10,000,000 | ~40GB |
+| 文档数量 | 分块数量（平均 10/文档） | 向量存储空间（1024维） | 向量存储空间（768维） |
+|----------|-------------------------|----------------------|----------------------|
+| 1,000 | 10,000 | ~40MB | ~30MB |
+| 10,000 | 100,000 | ~400MB | ~300MB |
+| 100,000 | 1,000,000 | ~4GB | ~3GB |
+| 1,000,000 | 10,000,000 | ~40GB | ~30GB |
 
 ---
 
@@ -334,16 +418,20 @@ public class OpenAIEmbeddingService implements EmbeddingService {
 @Test
 public void testEmbeddingDimension() {
     float[] embedding = embeddingService.generateEmbedding("测试文本");
-    assertEquals(1024, embedding.length);
+    assertEquals(1024, embedding.length);  // bge
+    // assertEquals(768, embedding.length);  // m3e
 }
 ```
 
 ### Q2: 向量维度不匹配怎么办？
 
-检查以下配置是否一致：
-1. `langchain4j.openai.embedding-model.dimensions`
-2. `milvus.collection.dimension`
-3. 实际模型输出维度
+1. 如果使用 **Qdrant**：无需处理，动态向量会自动适配
+2. 如果使用 **Milvus**：需要重建 Collection
+   ```bash
+   # 删除旧 Collection
+   # 修改 milvus.collection.dimension 为新的维度
+   # 重新索引文档
+   ```
 
 ### Q3: Ollama 服务无法连接？
 
@@ -360,16 +448,17 @@ ollama serve
 
 ### Q4: 如何切换到其他模型？
 
-1. 修改配置文件中的 `model-name`
-2. 同步修改 `dimensions`（如果维度不同）
-3. 修改 Milvus 的 `dimension` 配置
-4. 重新创建 Milvus Collection
+1. 修改 `embedding.provider`
+2. 修改 `ollama.embedding-model`
+3. 如果使用 Milvus，同步修改 `milvus.collection.dimension`
+4. 如果使用 Qdrant，无需修改向量库配置
 
 ```yaml
-# 切换到 bge-m3（多语言模型）
-embedding-model:
-  model-name: bge-m3
-  dimensions: 1024
+# 切换到 m3e-base
+embedding:
+  provider: m3e
+ollama:
+  embedding-model: m3e
 ```
 
 ### Q5: 批量 Embedding 时内存溢出？
@@ -386,6 +475,10 @@ for (int i = 0; i < texts.size(); i += batchSize) {
 }
 ```
 
+### Q6: 为什么 Mock 模式下相同文本向量相同？
+
+MockEmbeddingService 使用 **MD5 哈希**生成确定性伪随机向量，保证相同文本产生相同向量，从而保证 Mock 模式下语义检索的一致性。
+
 ---
 
 ## 📚 参考资料
@@ -394,7 +487,6 @@ for (int i = 0; i < texts.size(); i += batchSize) {
 
 - [BGE 模型 GitHub](https://github.com/FlagOpen/FlagEmbedding)
 - [Ollama 官方文档](https://ollama.com/docs)
-- [vLLM 官方文档](https://vllm.readthedocs.io/)
 - [LangChain4j 文档](https://docs.langchain4j.dev/)
 
 ### 技术论文
@@ -404,9 +496,10 @@ for (int i = 0; i < texts.size(); i += batchSize) {
 
 ### 相关文档
 
-- [架构设计详解](./架构设计详解.md)
-- [部署运维指南](./部署运维指南.md)
-- [API 接口文档](./API接口文档.md)
+- [AI技术方案](../AI技术方案.md)
+- [架构设计详解](../../mallchat-ai-rag/docs/架构设计详解.md)
+- [部署运维指南](../../mallchat-ai-rag/docs/部署运维指南.md)
+- [API 接口文档](../../mallchat-ai-rag/docs/API接口文档.md)
 
 ---
 
@@ -414,6 +507,7 @@ for (int i = 0; i < texts.size(); i += batchSize) {
 
 | 日期 | 版本 | 更新内容 | 更新人 |
 |------|------|---------|--------|
+| 2026-06-13 | v1.1 | 迁移到 Ollama 部署方案；增加 m3e、Mock、Qdrant 动态向量说明 | AI Assistant |
 | 2026-05-28 | v1.0 | 创建 Embedding 模型配置指南 | Kiro |
 
 ---

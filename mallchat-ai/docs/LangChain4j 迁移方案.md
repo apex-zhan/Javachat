@@ -12,19 +12,26 @@
 - ✅ 智能助手模块（mallchat-ai-assistant）
 - ✅ 配置文件（application-ai.yml）
 
+### 迁移阶段
+
+本次迁移分为两个阶段：
+
+1. **第一阶段（已完成）**: 从 Spring AI 迁移到 LangChain4j 0.27.1
+2. **第二阶段（已完成）**: 从 LangChain4j 0.27.1 升级到 0.36.0，并接入 Ollama + Qdrant 本地开源方案
+
 ### 迁移时间估算
-- 依赖调整：30 分钟
-- 代码重构：2-3 小时
-- 测试验证：1 小时
-- **总计：3-4 小时**
+
+- **第一阶段**: 3-4 小时
+- **第二阶段**: 2-3 天（涉及 Qdrant、Ollama、多模型适配）
 
 ---
 
-## 🔄 迁移步骤
+## 第一阶段：从 Spring AI 迁移到 LangChain4j
 
 ### 阶段 1：依赖调整（30 分钟）
 
 #### 1.1 更新父 POM
+
 ```xml
 <!-- mallchat-ai/pom.xml -->
 <properties>
@@ -32,10 +39,12 @@
     <!-- <spring-ai.version>1.1.3</spring-ai.version> -->
     
     <!-- 添加 LangChain4j -->
-    <langchain4j.version>0.27.1</langchain4j.version>
+    <langchain4j.version>0.36.0</langchain4j.version>
+    <langchain4j-spring-boot.version>0.36.0</langchain4j-spring-boot.version>
     
     <!-- 保持不变 -->
     <milvus-sdk.version>2.3.4</milvus-sdk.version>
+    <qdrant-java-client.version>1.14.0</qdrant-java-client.version>
     <tika.version>2.9.1</tika.version>
     <jqwik.version>1.7.4</jqwik.version>
 </properties>
@@ -51,7 +60,7 @@
         </dependency>
         -->
         
-        <!-- 添加 LangChain4j -->
+        <!-- LangChain4j Core -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j</artifactId>
@@ -66,28 +75,26 @@
         
         <dependency>
             <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-embeddings-all-minilm-l6-v2</artifactId>
+            <artifactId>langchain4j-ollama</artifactId>
             <version>${langchain4j.version}</version>
         </dependency>
         
-        <!-- 其他依赖保持不变 -->
+        <!-- Qdrant -->
+        <dependency>
+            <groupId>io.qdrant</groupId>
+            <artifactId>qdrant-java-client</artifactId>
+            <version>${qdrant-java-client.version}</version>
+        </dependency>
     </dependencies>
 </dependencyManagement>
 ```
 
 #### 1.2 更新 LLM 模块 POM
+
 ```xml
 <!-- mallchat-ai/mallchat-ai-llm/pom.xml -->
 <dependencies>
-    <!-- 移除 Spring AI -->
-    <!--
-    <dependency>
-        <groupId>org.springframework.ai</groupId>
-        <artifactId>spring-ai-openai-spring-boot-starter</artifactId>
-    </dependency>
-    -->
-    
-    <!-- 添加 LangChain4j -->
+    <!-- LangChain4j -->
     <dependency>
         <groupId>dev.langchain4j</groupId>
         <artifactId>langchain4j</artifactId>
@@ -96,6 +103,11 @@
     <dependency>
         <groupId>dev.langchain4j</groupId>
         <artifactId>langchain4j-open-ai</artifactId>
+    </dependency>
+    
+    <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j-ollama</artifactId>
     </dependency>
     
     <!-- 保持其他依赖不变 -->
@@ -119,10 +131,11 @@
 ```
 
 #### 1.3 更新 Vector 模块 POM
+
 ```xml
 <!-- mallchat-ai/mallchat-ai-vector/pom.xml -->
 <dependencies>
-    <!-- 添加 LangChain4j Embeddings -->
+    <!-- LangChain4j -->
     <dependency>
         <groupId>dev.langchain4j</groupId>
         <artifactId>langchain4j</artifactId>
@@ -130,13 +143,18 @@
     
     <dependency>
         <groupId>dev.langchain4j</groupId>
-        <artifactId>langchain4j-embeddings-all-minilm-l6-v2</artifactId>
+        <artifactId>langchain4j-ollama</artifactId>
     </dependency>
     
-    <!-- Milvus SDK 保持不变 -->
+    <!-- 向量数据库 -->
     <dependency>
         <groupId>io.milvus</groupId>
         <artifactId>milvus-sdk-java</artifactId>
+    </dependency>
+    
+    <dependency>
+        <groupId>io.qdrant</groupId>
+        <artifactId>qdrant-java-client</artifactId>
     </dependency>
     
     <dependency>
@@ -148,474 +166,315 @@
 
 ---
 
-### 阶段 2：配置文件调整（15 分钟）
+### 阶段 2：配置文件调整
 
-#### 2.1 更新 application-ai.yml
+#### 2.1 推荐配置（Ollama + Qdrant）
+
 ```yaml
-# mallchat-chat-server/src/main/resources/application-ai.yml
+# mallchat-chat-server/src/main/resources/application-local.yml
 
-# 移除 Spring AI 配置
-# spring:
-#   ai:
-#     openai:
-#       api-key: ${OPENAI_API_KEY}
-#       base-url: https://api.openai.com
-#       chat:
-#         model: gpt-3.5-turbo
-#         temperature: 0.7
-#         max-tokens: 2000
+spring:
+  profiles:
+    active: local
 
-# 添加 LangChain4j 配置
+embedding:
+  provider: bge
+
+ollama:
+  base-url: http://localhost:11434
+  embedding-model: bge-large-zh-v1.5
+  timeout: 60s
+  max-retries: 3
+
+vector:
+  store:
+    provider: qdrant
+
+qdrant:
+  host: localhost
+  port: 6334
+  collection-name: mallchat_knowledge
+  grpc-timeout: 30
+  use-tls: false
+
 langchain4j:
+  llm:
+    provider: qwen
+    fallback-provider: llama
+
+ollama:
+  base-url: http://localhost:11434
+  model-name: qwen2.5:14b
+  temperature: 0.7
+  timeout: 120s
+```
+
+#### 2.2 兼容 OpenAI 配置
+
+```yaml
+# 兼容旧方案
+langchain4j:
+  llm:
+    provider: openai
   openai:
-    # API 配置
-    api-key: ${OPENAI_API_KEY:}
+    api-key: sk-xxx
     base-url: https://api.openai.com/v1
-    timeout: 60s
-    max-retries: 3
-    log-requests: true
-    log-responses: false
-    
-    # 聊天模型配置
     chat-model:
       model-name: gpt-3.5-turbo
       temperature: 0.7
       max-tokens: 2000
-      top-p: 1.0
-      frequency-penalty: 0.0
-      presence-penalty: 0.0
-    
-    # 流式聊天模型配置
-    streaming-chat-model:
-      model-name: gpt-3.5-turbo
-      temperature: 0.7
-      max-tokens: 2000
-    
-    # 嵌入模型配置
     embedding-model:
-      model-name: text-embedding-ada-002
-      dimensions: 1536
+      model-name: text-embedding-3-large
+```
 
-# Milvus 配置保持不变
-milvus:
-  host: ${MILVUS_HOST:localhost}
-  port: ${MILVUS_PORT:19530}
-  database: mallchat_ai
-  collection:
-    name: document_vectors
-    dimension: 1536
-    index-type: IVF_FLAT
-    metric-type: L2
-    nlist: 1024
+#### 2.3 Mock 模式配置
 
-# 文档处理配置保持不变
-document:
-  processing:
-    chunk-size: 500
-    chunk-overlap: 50
-    max-file-size: 10485760  # 10MB
-    allowed-types: txt,pdf,md,html,docx
+```yaml
+spring:
+  profiles:
+    active: mock
+  main:
+    allow-bean-definition-overriding: true
 
-# RAG 配置保持不变
-rag:
-  retrieval:
-    top-k: 5
-    score-threshold: 0.7
-  prompt:
-    system-instruction: "你是一个专业的AI助手，请基于提供的上下文回答问题。"
+langchain4j:
+  llm:
+    provider: mock
+
+embedding:
+  provider: mock
+
+vector:
+  store:
+    provider: mock
 ```
 
 ---
 
-### 阶段 3：代码重构（2-3 小时）
+### 阶段 3：代码重构
 
-#### 3.1 LLM Service 接口保持不变
+#### 3.1 LLM Service 接口
+
 ```java
-// mallchat-ai/mallchat-ai-llm/src/main/java/com/abin/mallchat/ai/llm/service/LLMService.java
-package com.abin.mallchat.ai.llm.service;
-
-import com.abin.mallchat.ai.llm.domain.LLMOptions;
-import reactor.core.publisher.Flux;
-
-/**
- * LLM 服务接口（保持不变）
- */
 public interface LLMService {
-    /**
-     * 流式调用 LLM
-     */
     Flux<String> streamChat(String prompt, LLMOptions options);
-    
-    /**
-     * 非流式调用 LLM
-     */
     String chat(String prompt, LLMOptions options);
-    
-    /**
-     * 计算 token 数量
-     */
+    Flux<String> streamChat(List<ChatMessage> messages, LLMOptions options);
+    String chat(List<ChatMessage> messages, LLMOptions options);
     int countTokens(String text);
 }
 ```
 
-#### 3.2 LangChain4j 配置类（新增）
+#### 3.2 QwenLLMService 实现（Ollama）
+
 ```java
-// mallchat-ai/mallchat-ai-llm/src/main/java/com/abin/mallchat/ai/llm/config/LangChain4jConfig.java
-package com.abin.mallchat.ai.llm.config;
+@Slf4j
+@Service
+@Profile("!mock")
+@ConditionalOnProperty(name = "langchain4j.llm.provider", havingValue = "qwen")
+public class QwenLLMService implements LLMService {
 
-import dev.langchain4j.model.chat.ChatLanguageModel;
-import dev.langchain4j.model.chat.StreamingChatLanguageModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
-import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
-import dev.langchain4j.model.openai.OpenAiTokenizer;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-
-import java.time.Duration;
-
-@Configuration
-public class LangChain4jConfig {
-    
-    @Value("${langchain4j.openai.api-key}")
-    private String apiKey;
-    
-    @Value("${langchain4j.openai.base-url:https://api.openai.com/v1}")
+    @Value("${ollama.base-url:http://localhost:11434}")
     private String baseUrl;
-    
-    @Value("${langchain4j.openai.chat-model.model-name:gpt-3.5-turbo}")
+
+    @Value("${ollama.model-name:qwen2.5:14b}")
     private String modelName;
-    
-    @Value("${langchain4j.openai.chat-model.temperature:0.7}")
-    private Double temperature;
-    
-    @Value("${langchain4j.openai.chat-model.max-tokens:2000}")
-    private Integer maxTokens;
-    
-    @Value("${langchain4j.openai.timeout:60s}")
-    private Duration timeout;
-    
-    @Value("${langchain4j.openai.max-retries:3}")
-    private Integer maxRetries;
-    
-    /**
-     * 同步聊天模型
-     */
-    @Bean
-    public ChatLanguageModel chatLanguageModel() {
-        return OpenAiChatModel.builder()
-                .apiKey(apiKey)
-                .baseUrl(baseUrl)
-                .modelName(modelName)
-                .temperature(temperature)
-                .maxTokens(maxTokens)
-                .timeout(timeout)
-                .maxRetries(maxRetries)
-                .logRequests(true)
-                .logResponses(false)
-                .build();
-    }
-    
-    /**
-     * 流式聊天模型
-     */
-    @Bean
-    public StreamingChatLanguageModel streamingChatLanguageModel() {
-        return OpenAiStreamingChatModel.builder()
-                .apiKey(apiKey)
-                .baseUrl(baseUrl)
-                .modelName(modelName)
-                .temperature(temperature)
-                .maxTokens(maxTokens)
-                .timeout(timeout)
-                .logRequests(true)
-                .logResponses(false)
-                .build();
-    }
-    
-    /**
-     * Token 计数器
-     */
-    @Bean
-    public OpenAiTokenizer openAiTokenizer() {
-        return new OpenAiTokenizer(modelName);
-    }
-}
-```
 
-#### 3.3 OpenAI LLM Service 实现（重构）
-```java
-// mallchat-ai/mallchat-ai-llm/src/main/java/com/abin/mallchat/ai/llm/service/impl/OpenAILLMService.java
-package com.abin.mallchat.ai.llm.service.impl;
+    private ChatLanguageModel chatModel;
+    private StreamingChatLanguageModel streamingChatModel;
 
-import com.abin.mallchat.ai.llm.domain.LLMOptions;
-import com.abin.mallchat.ai.llm.service.LLMService;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.model.StreamingResponseHandler;
-import dev.langchain4j.model.chat.ChatLanguageModel;
-import dev.langchain4j.model.chat.StreamingChatLanguageModel;
-import dev.langchain4j.model.openai.OpenAiTokenizer;
-import dev.langchain4j.model.output.Response;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import reactor.core.publisher.Flux;
-
-/**
- * OpenAI LLM 服务实现（使用 LangChain4j）
- */
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class OpenAILLMService implements LLMService {
-    
-    private final ChatLanguageModel chatLanguageModel;
-    private final StreamingChatLanguageModel streamingChatLanguageModel;
-    private final OpenAiTokenizer tokenizer;
-    
-    @Override
-    public Flux<String> streamChat(String prompt, LLMOptions options) {
-        log.info("开始流式调用 LLM, prompt 长度: {}", prompt.length());
-        
-        return Flux.create(sink -> {
-            try {
-                streamingChatLanguageModel.generate(
-                    prompt,
-                    new StreamingResponseHandler<AiMessage>() {
-                        @Override
-                        public void onNext(String token) {
-                            sink.next(token);
-                        }
-                        
-                        @Override
-                        public void onComplete(Response<AiMessage> response) {
-                            log.info("LLM 流式调用完成");
-                            sink.complete();
-                        }
-                        
-                        @Override
-                        public void onError(Throwable error) {
-                            log.error("LLM 流式调用失败", error);
-                            sink.error(error);
-                        }
-                    }
-                );
-            } catch (Exception e) {
-                log.error("启动 LLM 流式调用失败", e);
-                sink.error(e);
-            }
-        });
-    }
-    
-    @Override
-    public String chat(String prompt, LLMOptions options) {
-        log.info("开始同步调用 LLM, prompt 长度: {}", prompt.length());
-        
-        try {
-            String response = chatLanguageModel.generate(prompt);
-            log.info("LLM 同步调用完成, 响应长度: {}", response.length());
-            return response;
-        } catch (Exception e) {
-            log.error("LLM 同步调用失败", e);
-            throw new RuntimeException("LLM 调用失败: " + e.getMessage(), e);
-        }
-    }
-    
-    @Override
-    public int countTokens(String text) {
-        return tokenizer.estimateTokenCountInText(text);
-    }
-}
-```
-
-#### 3.4 Embedding Service 接口（新增）
-```java
-// mallchat-ai/mallchat-ai-vector/src/main/java/com/abin/mallchat/ai/vector/service/EmbeddingService.java
-package com.abin.mallchat.ai.vector.service;
-
-import java.util.List;
-
-/**
- * 嵌入服务接口
- */
-public interface EmbeddingService {
-    /**
-     * 生成单个文本的向量
-     */
-    float[] generateEmbedding(String text);
-    
-    /**
-     * 批量生成向量
-     */
-    List<float[]> generateEmbeddings(List<String> texts);
-}
-```
-
-#### 3.5 Embedding Service 实现（新增）
-```java
-// mallchat-ai/mallchat-ai-vector/src/main/java/com/abin/mallchat/ai/vector/service/impl/OpenAIEmbeddingService.java
-package com.abin.mallchat.ai.vector.service.impl;
-
-import com.abin.mallchat.ai.vector.service.EmbeddingService;
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
-import dev.langchain4j.model.output.Response;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
-import javax.annotation.PostConstruct;
-import java.util.List;
-import java.util.stream.Collectors;
-
-/**
- * OpenAI 嵌入服务实现
- */
-@Slf4j
-@Service
-public class OpenAIEmbeddingService implements EmbeddingService {
-    
-    @Value("${langchain4j.openai.api-key}")
-    private String apiKey;
-    
-    @Value("${langchain4j.openai.embedding-model.model-name:text-embedding-ada-002}")
-    private String modelName;
-    
-    private EmbeddingModel embeddingModel;
-    
     @PostConstruct
     public void init() {
-        this.embeddingModel = OpenAiEmbeddingModel.builder()
-                .apiKey(apiKey)
+        this.chatModel = OllamaChatModel.builder()
+                .baseUrl(baseUrl)
                 .modelName(modelName)
+                .temperature(temperature)
+                .timeout(timeout)
+                .build();
+
+        this.streamingChatModel = OllamaStreamingChatModel.builder()
+                .baseUrl(baseUrl)
+                .modelName(modelName)
+                .temperature(temperature)
+                .timeout(timeout)
                 .build();
     }
-    
+
+    @Override
+    public Flux<String> streamChat(String prompt, LLMOptions options) {
+        return Flux.create(sink -> {
+            streamingChatModel.generate(prompt, new StreamingResponseHandler<AiMessage>() {
+                @Override
+                public void onNext(String token) {
+                    if (token != null && !token.isEmpty()) {
+                        sink.next(token);
+                    }
+                }
+                @Override
+                public void onComplete(Response<AiMessage> response) {
+                    sink.complete();
+                }
+                @Override
+                public void onError(Throwable error) {
+                    sink.error(new LLMApiException("Qwen API call failed", error));
+                }
+            });
+        }, FluxSink.OverflowStrategy.BUFFER);
+    }
+}
+```
+
+#### 3.3 OllamaBgeEmbeddingService 实现
+
+```java
+@Slf4j
+@Service
+@Profile("!mock")
+@ConditionalOnProperty(name = "embedding.provider", havingValue = "bge", matchIfMissing = true)
+public class OllamaBgeEmbeddingService implements EmbeddingService {
+
+    @Value("${ollama.base-url:http://localhost:11434}")
+    private String baseUrl;
+
+    @Value("${ollama.embedding-model:bge-large-zh-v1.5}")
+    private String modelName;
+
+    private EmbeddingModel embeddingModel;
+
+    @PostConstruct
+    public void init() {
+        this.embeddingModel = OllamaEmbeddingModel.builder()
+                .baseUrl(baseUrl)
+                .modelName(modelName)
+                .timeout(timeout)
+                .maxRetries(maxRetries)
+                .build();
+    }
+
     @Override
     public float[] generateEmbedding(String text) {
-        log.debug("生成文本向量, 文本长度: {}", text.length());
-        
         Response<Embedding> response = embeddingModel.embed(text);
-        float[] vector = response.content().vector();
-        
-        log.debug("向量生成完成, 维度: {}", vector.length);
-        return vector;
+        return response.content().vector();
     }
-    
+
     @Override
     public List<float[]> generateEmbeddings(List<String> texts) {
-        log.info("批量生成向量, 数量: {}", texts.size());
-        
-        return texts.stream()
-                .map(this::generateEmbedding)
+        List<TextSegment> segments = texts.stream()
+                .map(TextSegment::from)
+                .collect(Collectors.toList());
+        Response<List<Embedding>> response = embeddingModel.embedAll(segments);
+        return response.content().stream()
+                .map(Embedding::vector)
                 .collect(Collectors.toList());
     }
 }
 ```
 
----
+#### 3.4 QdrantVectorService 实现
 
-### 阶段 4：测试代码调整（30 分钟）
-
-#### 4.1 更新单元测试
 ```java
-// mallchat-ai/mallchat-ai-llm/src/test/java/com/abin/mallchat/ai/llm/service/impl/OpenAILLMServiceTest.java
-package com.abin.mallchat.ai.llm.service.impl;
+@Slf4j
+@Service
+@Profile("!mock")
+@ConditionalOnProperty(name = "vector.store.provider", havingValue = "qdrant", matchIfMissing = true)
+public class QdrantVectorService implements VectorService {
 
-import com.abin.mallchat.ai.llm.domain.LLMOptions;
-import com.abin.mallchat.ai.llm.service.LLMService;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import reactor.core.publisher.Flux;
-import reactor.test.StepVerifier;
+    @Value("${qdrant.host:localhost}")
+    private String host;
 
-import static org.assertj.core.api.Assertions.assertThat;
+    @Value("${qdrant.port:6334}")
+    private Integer port;
 
-@SpringBootTest
-class OpenAILLMServiceTest {
-    
-    @Autowired
-    private LLMService llmService;
-    
-    @Test
-    void testStreamChat() {
-        // Given
-        String prompt = "请用一句话介绍 Java";
-        LLMOptions options = new LLMOptions();
-        
-        // When
-        Flux<String> response = llmService.streamChat(prompt, options);
-        
-        // Then
-        StepVerifier.create(response)
-                .expectNextMatches(token -> token != null && !token.isEmpty())
-                .thenConsumeWhile(token -> true)
-                .verifyComplete();
+    @Value("${qdrant.collection-name:mallchat_knowledge}")
+    private String collectionName;
+
+    private QdrantClient qdrantClient;
+
+    @PostConstruct
+    public void init() {
+        QdrantGrpcClient.Builder grpcBuilder = QdrantGrpcClient.newBuilder(host, port, false);
+        qdrantClient = new QdrantClient(grpcBuilder.build());
+        createCollectionIfNotExists();
     }
-    
-    @Test
-    void testChat() {
-        // Given
-        String prompt = "请用一句话介绍 Java";
-        LLMOptions options = new LLMOptions();
-        
-        // When
-        String response = llmService.chat(prompt, options);
-        
-        // Then
-        assertThat(response).isNotEmpty();
-        assertThat(response).contains("Java");
-    }
-    
-    @Test
-    void testCountTokens() {
-        // Given
-        String text = "Hello, world!";
-        
-        // When
-        int tokenCount = llmService.countTokens(text);
-        
-        // Then
-        assertThat(tokenCount).isGreaterThan(0);
+
+    private void createCollectionIfNotExists() {
+        // 使用动态向量，支持 1024/768 维
+        Collections.CollectionOperationResponse response = qdrantClient.createCollectionAsync(
+                collectionName,
+                Collections.VectorParams.newBuilder()
+                        .setDistance(Collections.Distance.Cosine)
+                        .setOnDisk(true)
+                        .setDynamic(true)
+                        .build()
+        ).get();
     }
 }
 ```
 
-#### 4.2 属性测试保持不变
-```java
-// 属性测试代码无需修改，因为接口没有变化
-// mallchat-ai/mallchat-ai-llm/src/test/java/com/abin/mallchat/ai/llm/service/impl/StreamResponseConsistencyPropertyTest.java
-// 保持原样即可
-```
-
 ---
 
-### 阶段 5：验证测试（1 小时）
+### 阶段 4：测试验证
 
-#### 5.1 编译验证
+#### 4.1 编译验证
+
 ```bash
 cd mallchat-ai
 mvn clean compile
 ```
 
-#### 5.2 单元测试
+#### 4.2 单元测试
+
 ```bash
 mvn test
 ```
 
-#### 5.3 集成测试
-```bash
-# 启动应用
-cd ../mallchat-chat-server
-mvn spring-boot:run -Dspring.profiles.active=local,ai
+#### 4.3 集成测试
 
-# 测试 LLM 调用
+```bash
+# Mock 模式启动
+cd ../mallchat-chat-server
+mvn spring-boot:run -Dspring-boot.run.profiles=mock
+
+# 测试 AI 助手接口
 curl -X POST http://localhost:8080/api/ai/assistant/question \
   -H "Content-Type: application/json" \
-  -d '{"question": "你好，请介绍一下自己"}'
+  -H "Accept: text/event-stream" \
+  -d '{"userId": 10001, "question": "你好"}'
+
+# 测试 RAG 接口
+curl -X POST http://localhost:8080/api/stream/rag/query \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{"userId": 10001, "question": "MallChat 是什么？"}'
 ```
+
+---
+
+## 第二阶段：升级到 LangChain4j 0.36.0 + Ollama + Qdrant
+
+### 升级原因
+
+1. **Ollama 支持**: LangChain4j 0.36.0 原生支持 OllamaChatModel 和 OllamaEmbeddingModel
+2. **本地部署**: 业务要求数据不出域，需要本地 LLM 和 Embedding
+3. **动态向量**: Qdrant 支持动态向量，兼容多种 Embedding 维度
+4. **Mock 模式**: 便于本地开发和测试
+
+### 升级内容
+
+| 组件 | 升级前 | 升级后 |
+|------|--------|--------|
+| LangChain4j | 0.27.1 | 0.36.0 |
+| LLM | OpenAI API | Ollama + Qwen2.5-14B |
+| Embedding | OpenAI API | Ollama + bge-large-zh-v1.5 |
+| 向量库 | Milvus | Qdrant（动态向量） |
+| 新增 | - | Mock 模式、LLMServiceFactory、多模型支持 |
+
+### 关键变化
+
+1. **新增依赖**: `langchain4j-ollama`、`qdrant-java-client`
+2. **新增服务**: `QwenLLMService`、`LlamaLLMService`、`OllamaBgeEmbeddingService`、`M3eEmbeddingService`、`QdrantVectorService`
+3. **新增工厂**: `LLMServiceFactory` 管理多 LLM 提供商
+4. **新增配置**: `application-mock.yml` 支持 Mock 模式
+5. **接口不变**: `LLMService` 和 `EmbeddingService` 接口保持稳定
 
 ---
 
@@ -626,10 +485,10 @@ curl -X POST http://localhost:8080/api/ai/assistant/question \
 | 文件类型 | 修改文件数 | 新增文件数 | 删除文件数 |
 |---------|-----------|-----------|-----------|
 | POM 文件 | 4 | 0 | 0 |
-| 配置文件 | 1 | 0 | 0 |
-| Java 类 | 2 | 2 | 0 |
+| 配置文件 | 2 | 1 | 0 |
+| Java 类 | 3 | 8 | 0 |
 | 测试类 | 1 | 0 | 0 |
-| **总计** | **8** | **2** | **0** |
+| **总计** | **10** | **9** | **0** |
 
 ### API 对比
 
@@ -639,54 +498,76 @@ curl -X POST http://localhost:8080/api/ai/assistant/question \
 | 同步聊天 | `ChatClient.call()` | `ChatLanguageModel.generate()` | ⚠️ API 变化 |
 | 生成向量 | `EmbeddingClient.embed()` | `EmbeddingModel.embed()` | ⚠️ API 变化 |
 | Token 计数 | 需自己实现 | `OpenAiTokenizer.estimateTokenCountInText()` | ✅ 更方便 |
+| Ollama 支持 | 不支持 | `OllamaChatModel`、`OllamaEmbeddingModel` | ✅ 新增 |
 
 ---
 
 ## ⚠️ 注意事项
 
 ### 1. 环境变量
-确保设置了 OpenAI API Key：
+
+生产环境建议通过环境变量注入：
 ```bash
+export OLLAMA_BASE_URL=http://localhost:11434
+export QDRANT_HOST=localhost
+export QDRANT_PORT=6334
 export OPENAI_API_KEY=sk-your-api-key
 ```
 
 ### 2. 依赖冲突
+
 如果遇到依赖冲突，检查：
 ```bash
 mvn dependency:tree | grep langchain4j
+mvn dependency:tree | grep qdrant
 ```
 
 ### 3. 日志配置
-LangChain4j 的日志级别：
+
 ```yaml
 logging:
   level:
     dev.langchain4j: DEBUG
+    com.abin.mallchat.ai: DEBUG
 ```
 
 ### 4. 超时配置
-根据实际情况调整超时时间：
+
 ```yaml
-langchain4j:
-  openai:
-    timeout: 120s  # 增加到 2 分钟
+ollama:
+  timeout: 120s  # LLM 推理较慢时增加
+
+qdrant:
+  grpc-timeout: 30
+```
+
+### 5. Mock 模式
+
+Mock 模式下必须设置：
+```yaml
+spring:
+  main:
+    allow-bean-definition-overriding: true
 ```
 
 ---
 
 ## 🎯 迁移检查清单
 
-- [ ] 更新所有 POM 文件
-- [ ] 更新配置文件 application-ai.yml
-- [ ] 创建 LangChain4jConfig 配置类
-- [ ] 重构 OpenAILLMService 实现
-- [ ] 创建 EmbeddingService 接口和实现
-- [ ] 更新单元测试
-- [ ] 运行所有测试确保通过
-- [ ] 启动应用验证功能
-- [ ] 测试流式输出
-- [ ] 测试向量生成
-- [ ] 更新文档
+- [x] 更新所有 POM 文件
+- [x] 更新配置文件 application-ai.yml / application-local.yml / application-mock.yml
+- [x] 创建 LangChain4jConfig 配置类
+- [x] 创建 QwenLLMService / LlamaLLMService
+- [x] 创建 OllamaBgeEmbeddingService / M3eEmbeddingService
+- [x] 创建 QdrantVectorService
+- [x] 创建 LLMServiceFactory
+- [x] 创建 Mock 系列实现
+- [x] 更新单元测试
+- [x] 运行所有测试确保通过
+- [x] 启动应用验证功能
+- [x] 测试流式输出
+- [x] 测试向量生成
+- [x] 更新文档
 
 ---
 
@@ -694,7 +575,10 @@ langchain4j:
 
 - [LangChain4j 官方文档](https://docs.langchain4j.dev/)
 - [LangChain4j GitHub](https://github.com/langchain4j/langchain4j)
-- [OpenAI API 文档](https://platform.openai.com/docs/api-reference)
+- [Ollama 官方文档](https://ollama.com/)
+- [Qdrant 官方文档](https://qdrant.tech/documentation/)
+- [AI技术方案](../AI技术方案.md)
+- [部署运维指南](../../mallchat-ai-rag/docs/部署运维指南.md)
 
 ---
 
@@ -703,28 +587,42 @@ langchain4j:
 ### Q1: 依赖下载失败怎么办？
 A: 检查 Maven 仓库配置，确保可以访问 Maven Central。
 
-### Q2: API Key 无效怎么办？
-A: 检查环境变量是否正确设置，或在配置文件中直接配置（不推荐）。
+### Q2: Ollama 无法连接怎么办？
+A: 检查 Ollama 是否已启动：`curl http://localhost:11434/api/tags`；检查 `ollama.base-url` 配置。
 
-### Q3: 流式输出不工作怎么办？
+### Q3: Qdrant gRPC 端口是多少？
+A: 默认 REST 端口是 6333，Java SDK 使用 gRPC 端口 6334，配置时注意区分。
+
+### Q4: 流式输出不工作怎么办？
 A: 检查是否正确使用了 `StreamingChatLanguageModel` 和 `StreamingResponseHandler`。
 
-### Q4: Token 计数不准确怎么办？
-A: `OpenAiTokenizer` 是估算值，实际消耗以 OpenAI API 返回为准。
+### Q5: Mock 模式下 Bean 冲突怎么办？
+A: 确保设置 `spring.main.allow-bean-definition-overriding: true`。
 
 ---
 
 ## ✅ 迁移完成标志
 
-当以下所有项都完成时，迁移即告成功：
-
 1. ✅ 所有测试通过
 2. ✅ 应用可以正常启动
 3. ✅ LLM 调用正常工作
 4. ✅ 流式输出正常工作
-5. ✅ 向量生成正常工作
-6. ✅ 无编译错误和警告
-7. ✅ 日志输出正常
-8. ✅ 性能符合预期
+5. ✅ Embedding 生成正常工作
+6. ✅ 向量检索正常工作
+7. ✅ Mock 模式正常工作
+8. ✅ 无编译错误和警告
+9. ✅ 日志输出正常
+10. ✅ 性能符合预期
 
-恭喜！你已成功迁移到 LangChain4j！🎉
+---
+
+## 📝 更新日志
+
+| 日期 | 版本 | 更新内容 |
+|------|------|---------|
+| 2026-06-13 | v2.0 | 补充第二阶段升级：LangChain4j 0.36.0 + Ollama + Qdrant + Mock 模式 |
+| 2025-01-05 | v1.0 | 完成从 Spring AI 到 LangChain4j 的迁移方案 |
+
+---
+
+*本文档由 AI Assistant 维护，如有问题请及时反馈。*

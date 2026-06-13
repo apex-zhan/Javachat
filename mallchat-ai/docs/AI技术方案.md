@@ -1,9 +1,10 @@
 # MallChat AI 技术方案
 
-> **版本**: v2.0  
-> **日期**: 2026-05-31  
+> **版本**: v2.1  
+> **日期**: 2026-06-13  
 > **作者**: AI Assistant  
-> **适用范围**: mallchat-ai 模块
+> **适用范围**: mallchat-ai 模块  
+> **变更说明**: 随代码从 OpenAI/Milvus 方案全面迁移到 Ollama/Qdrant 本地开源方案后更新文档；补充 Mock 模式、多轮对话、动态向量等新实现。
 
 ---
 
@@ -16,10 +17,11 @@
 5. [向量数据库](#5-向量数据库)
 6. [大语言模型](#6-大语言模型)
 7. [微调框架](#7-微调框架)
-8. [部署指南](#8-部署指南)
-9. [配置参考](#9-配置参考)
-10. [切换指南](#10-切换指南)
-11. [常见问题](#11-常见问题)
+8. [Mock 模式](#8-mock-模式)
+9. [部署指南](#9-部署指南)
+10. [配置参考](#10-配置参考)
+11. [切换指南](#11-切换指南)
+12. [常见问题](#12-常见问题)
 
 ---
 
@@ -36,6 +38,7 @@
 | 成本不可控 | API 调用按量计费，高并发场景成本高 |
 | 模型选择受限 | 只能使用服务商提供的模型，无法自定义 |
 | 微调困难 | 闭源模型无法进行领域微调 |
+| 部署复杂 | Milvus 需要独立集群，运维成本高 |
 
 **新方案的优势**:
 
@@ -46,6 +49,7 @@
 | 模型自主可控 | 可自由选择、微调、替换模型 |
 | 低延迟 | 本地推理，无网络传输延迟 |
 | 支持微调 | 开源模型可通过 LoRA 等方式进行领域微调 |
+| 部署简单 | Qdrant 单容器即可运行，支持动态向量 |
 
 ### 1.2 方案总览
 
@@ -69,9 +73,10 @@
 ### 1.3 核心设计原则
 
 1. **推荐/备选双轨制**: 每个组件都有推荐方案和备选方案，通过配置切换
-2. **动态适配**: Qdrant 支持动态向量维度，自动适配不同 Embedding 模型
+2. **动态适配**: Qdrant 支持动态向量维度，自动适配不同 Embedding 模型（1024 / 768 维）
 3. **统一抽象**: 所有组件通过接口抽象，底层实现可插拔
-4. **条件注入**: Spring Boot `@ConditionalOnProperty` 控制组件启用
+4. **条件注入**: Spring Boot `@ConditionalOnProperty` + `@Profile("!mock")` 控制组件启用
+5. **Mock 友好**: 提供完整的 Mock 实现，无外部依赖即可启动项目，方便本地开发和面试演示
 
 ---
 
@@ -87,7 +92,7 @@
 | **大模型** | Qwen2.5-14B | Llama3-70B | GPT-3.5/4 | 中文能力更强，显存需求更低 |
 | **推理框架** | Ollama | Ollama | HTTP API | 一键部署，管理方便 |
 | **微调框架** | LLaMA-Factory | Axolotl | 无 | 配置简单，社区活跃 |
-| **Java 集成** | LangChain4j 0.36 | LangChain4j 0.36 | LangChain4j 0.27 | 支持 Ollama、Qdrant |
+| **Java 集成** | LangChain4j 0.36 | LangChain4j 0.36 | LangChain4j 0.27 | 支持 Ollama、Qdrant、动态配置 |
 
 ### 2.2 Qwen2.5-14B vs Llama3-70B
 
@@ -162,16 +167,28 @@
 │  │              mallchat-ai-finetune                        │  │
 │  │  ┌────────────────┐         ┌────────────────────────┐  │  │
 │  │  │ Java 客户端     │◄───────►│ Python FastAPI 服务     │  │  │
-│  │  │ FineTuneClient │  HTTP   │  ┌──────────────────┐  │  │  │
-│  │  │ FineTuneService│         │  │ LLaMA-Factory    │  │  │  │
-│  │  └────────────────┘         │  │   Service [推荐] │  │  │  │
-│  │                              │  ├──────────────────┤  │  │  │
-│  │                              │  │ Axolotl          │  │  │  │
-│  │                              │  │   Service [备选] │  │  │  │
-│  │                              │  └──────────────────┘  │  │  │
-│  │                              └────────────────────────┘  │  │
-│  └─────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────┘
+│  │  │ FineTune   │  │ FineTune   │  │ DTOs    │ │   │
+│  │  │ Client     │  │ Service    │  │         │ │   │
+│  │  └─────┬──────┘  └────────────┘  └─────────┘ │   │
+│  └────────┼──────────────────────────────────────┘   │
+└───────────┼──────────────────────────────────────────┘
+            │ HTTP REST API
+            ▼
+┌──────────────────────────────────────────────────────┐
+│              Python 服务 (FastAPI)                    │
+│  ┌──────────────────────────────────────────────┐   │
+│  │              app/main.py                      │   │
+│  │  ┌────────────┐  ┌──────────────────────┐   │   │
+│  │  │ Task       │  │ Provider Router      │   │   │
+│  │  │ Manager    │  │ (llamafactory/axolotl)│   │   │
+│  │  └─────┬──────┘  └──────────┬───────────┘   │   │
+│  └────────┼────────────────────┼───────────────┘   │
+│           ▼                    ▼                   │
+│  ┌──────────────────┐  ┌──────────────────┐       │
+│  │ LLaMA-Factory    │  │ Axolotl          │       │
+│  │ Service [推荐]   │  │ Service [备选]   │       │
+│  └──────────────────┘  └──────────────────┘       │
+└──────────────────────────────────────────────────────┘
 ```
 
 ### 3.2 数据流图
@@ -221,14 +238,15 @@
 
 | 实现类 | 模型 | 维度 | 条件 |
 |--------|------|------|------|
-| `OllamaBgeEmbeddingService` | bge-large-zh-v1.5 | 1024 | `embedding.provider=bge` (默认) |
+| `OllamaBgeEmbeddingService` | bge-large-zh-v1.5 | 1024 | `embedding.provider=bge`（默认，非 mock） |
 | `M3eEmbeddingService` | m3e-base | 768 | `embedding.provider=m3e` |
 | `OpenAIEmbeddingService` | 任意 OpenAI 兼容模型 | 可配置 | `embedding.provider=openai` |
+| `MockEmbeddingService` | 确定性伪随机向量 | 1024（默认） | `spring.profiles.active=mock` |
 
 ### 4.3 为什么选 bge-large-zh-v1.5
 
 1. **中文优化**: 专门针对中文语义理解训练，在中文评测集上表现优异
-2. **长文本**: 支持最长 512 tokens 的输入
+2. **长文本**: 支持较长输入
 3. **开源可商用**: MIT 协议，无商用限制
 4. **社区活跃**: 北京智源人工智能研究院维护，持续更新
 
@@ -252,7 +270,7 @@ ollama list
 private EmbeddingService embeddingService;
 
 // 生成单个向量
-float[] vector = embeddingService.generateEmbedding(" MallChat 是什么？");
+float[] vector = embeddingService.generateEmbedding("MallChat 是什么？");
 // vector.length == 1024 (bge) 或 768 (m3e)
 
 // 批量生成
@@ -273,8 +291,9 @@ List<float[]> vectors = embeddingService.generateEmbeddings(
 
 | 实现类 | 数据库 | 条件 |
 |--------|--------|------|
-| `QdrantVectorService` | Qdrant | `vector.store.provider=qdrant` (默认) |
+| `QdrantVectorService` | Qdrant | `vector.store.provider=qdrant`（默认，非 mock） |
 | `MilvusVectorService` | Milvus | `vector.store.provider=milvus` |
+| `MockVectorService` | 内存 Map | `spring.profiles.active=mock` |
 
 ### 5.3 动态向量（核心特性）
 
@@ -282,13 +301,12 @@ List<float[]> vectors = embeddingService.generateEmbeddings(
 
 **Qdrant 解决方案**:
 
-```protobuf
-// Qdrant Collection 配置
-vector_params {
-    distance: Cosine
-    on_disk: true        // 向量落盘，降低内存
-    dynamic: true        // 关键：支持不同维度
-}
+```java
+Collections.VectorParams.newBuilder()
+    .setDistance(Collections.Distance.Cosine)
+    .setOnDisk(true)      // 向量落盘，降低内存
+    .setDynamic(true)     // 关键：支持不同维度
+    .build()
 ```
 
 开启 `dynamic: true` 后：
@@ -317,7 +335,7 @@ http://localhost:6333/dashboard
 @Autowired
 private VectorService vectorService;
 
-// 存储向量
+// 存储向量（DocumentChunk 的 metadata 中需包含 embedding）
 vectorService.storeVectors(documentId, chunks);
 
 // 语义检索
@@ -343,10 +361,11 @@ vectorService.deleteVectors(documentId);
 
 | 实现类 | 模型 | 部署方式 | 条件 |
 |--------|------|---------|------|
-| `QwenLLMService` | Qwen2.5-14B | Ollama | `langchain4j.llm.provider=qwen-ollama` (推荐) |
-| `LlamaLLMService` | Llama3-70B | Ollama | `langchain4j.llm.provider=llama` (备选) |
+| `QwenLLMService` | Qwen2.5-14B | Ollama | `langchain4j.llm.provider=qwen`（推荐，非 mock） |
+| `LlamaLLMService` | Llama3-70B | Ollama | `langchain4j.llm.provider=llama` |
 | `OpenAILLMService` | GPT-3.5/4 | OpenAI API | `langchain4j.llm.provider=openai` |
 | `ChatGLMLLMService` | ChatGLM | 智谱 API | `langchain4j.llm.provider=chatglm` |
+| `MockLLMService` | 模拟回复 | 本地 | `spring.profiles.active=mock` |
 
 ### 6.3 为什么选 Qwen2.5-14B
 
@@ -450,11 +469,6 @@ String response = llmService.chat(messages, LLMOptions.defaultOptions());
 │  ┌──────────────────┐  ┌──────────────────┐       │
 │  │ LLaMA-Factory    │  │ Axolotl          │       │
 │  │ Service [推荐]   │  │ Service [备选]   │       │
-│  │                  │  │                  │       │
-│  │ • 配置驱动       │  │ • YAML 配置      │       │
-│  │ • LoRA 微调      │  │ • LoRA 微调      │       │
-│  │ • DeepSpeed      │  │ • DeepSpeed      │       │
-│  │ • 模型合并       │  │ • 模型合并       │       │
 │  └──────────────────┘  └──────────────────┘       │
 └──────────────────────────────────────────────────────┘
 ```
@@ -480,7 +494,7 @@ JSONL      Qwen2.5-14B   LoRA r=64    监控日志    验证集测试   合并 L
 ### 7.5 部署微调服务
 
 ```bash
-cd mallchat-ai-finetune/python-service
+cd mallchat-ai/mallchat-ai-finetune/python-service
 
 # Docker Compose 启动
 docker-compose up -d
@@ -527,16 +541,57 @@ Mono<FineTuneResponse> response = fineTuneService.submitFineTune(request);
 
 ---
 
-## 8. 部署指南
+## 8. Mock 模式
 
-### 8.1 完整部署流程
+### 8.1 为什么需要 Mock 模式
+
+- 无需部署 Ollama、Qdrant 即可启动项目
+- 适合本地学习、面试准备、代码调试
+- 启动速度快，无外部依赖
+- 单元测试和集成测试不依赖外部服务
+
+### 8.2 启动方式
+
+```bash
+# 方式1：修改 application.yml
+spring:
+  profiles:
+    active: mock
+
+# 方式2：启动参数
+mvn spring-boot:run -Dspring-boot.run.profiles=mock
+
+# 方式3：IDE配置
+VM options: -Dspring.profiles.active=mock
+```
+
+### 8.3 Mock 行为说明
+
+| 组件 | Mock 行为 | 说明 |
+|------|---------|------|
+| LLM | 返回固定模拟回复 | 支持流式/非流式，带打字机效果 |
+| Embedding | MD5 哈希生成确定性向量 | 默认 1024 维，同文本同向量 |
+| Vector | 内存存储 + 余弦相似度 | ConcurrentHashMap 实现，重启丢失 |
+| FineTune | 模拟训练全生命周期 | 进度 0-100%，状态流转 |
+
+### 8.4 注意事项
+
+- Mock 模式下需要设置 `spring.main.allow-bean-definition-overriding: true`
+- Mock 向量存储是内存实现，重启后数据会丢失
+- 生产环境请勿使用 Mock 模式
+
+---
+
+## 9. 部署指南
+
+### 9.1 完整部署流程
 
 #### 步骤 1: 环境准备
 
 ```bash
 # 系统要求
 # - OS: Ubuntu 22.04 / CentOS 8 / Windows 11 WSL2
-# - GPU: NVIDIA RTX 4090 24GB 或 A100 40GB
+# - GPU: NVIDIA RTX 4090 24GB 或 A100 40GB（可选，CPU 也可运行但较慢）
 # - CPU: 16核+
 # - 内存: 64GB+
 # - 磁盘: 500GB+ SSD
@@ -611,7 +666,7 @@ curl http://localhost:8000/health
 #### 步骤 5: 启动 Java 项目
 
 ```bash
-# 配置 application.yml（见第 9 节）
+# 配置 application.yml（见第 10 节）
 
 # 编译
 mvn clean compile -pl mallchat-ai -am
@@ -620,7 +675,7 @@ mvn clean compile -pl mallchat-ai -am
 mvn spring-boot:run -pl mallchat-ai/mallchat-ai-assistant
 ```
 
-### 8.2 Docker Compose 完整编排
+### 9.2 Docker Compose 完整编排
 
 ```yaml
 version: '3.8'
@@ -694,16 +749,22 @@ volumes:
 
 ---
 
-## 9. 配置参考
+## 10. 配置参考
 
-### 9.1 完整配置（推荐方案）
+### 10.1 完整配置（推荐方案：本地 Ollama + Qdrant）
 
 ```yaml
 # application.yml - 推荐配置（全本地部署）
 
+spring:
+  profiles:
+    active: local
+  application:
+    name: mallchat
+
 # ==================== Embedding 配置 ====================
 embedding:
-  provider: bge   # 推荐: bge | 备选: m3e | 兼容: openai
+  provider: bge   # 推荐: bge | 备选: m3e | 兼容: openai | mock
 
 ollama:
   base-url: http://localhost:11434
@@ -714,7 +775,7 @@ ollama:
 # ==================== 向量数据库配置 ====================
 vector:
   store:
-    provider: qdrant   # 推荐: qdrant | 备选: milvus
+    provider: qdrant   # 推荐: qdrant | 备选: milvus | mock
 
 qdrant:
   host: localhost
@@ -728,16 +789,21 @@ qdrant:
 # milvus:
 #   host: localhost
 #   port: 19530
+#   database: default
 #   collection:
-#     name: mallchat_knowledge
+#     name: mallchat_knowledge_vectors
 #     dimension: 1024
 #     index-type: IVF_FLAT
 #     metric-type: COSINE
+#     index-params:
+#       nlist: 1024
+#     search-params:
+#       nprobe: 10
 
 # ==================== LLM 配置 ====================
 langchain4j:
   llm:
-    provider: qwen-ollama   # 推荐: qwen-ollama | 备选: llama
+    provider: qwen        # 推荐: qwen | 备选: llama | 兼容: openai/chatglm | mock
     fallback-provider: llama
 
 ollama:
@@ -754,18 +820,44 @@ ollama:
 #       base-url: https://api.openai.com
 #       model: gpt-3.5-turbo
 
+# ==================== 文档处理配置 ====================
+document:
+  allowed-formats: txt,md,html,pdf,docx,doc
+  max-file-size: 10485760      # 10MB
+  storage-path: ./uploads/documents
+  use-oss: false
+
 # ==================== 微调服务配置 ====================
 finetune:
   service-url: http://localhost:8000
   provider: llamafactory   # 推荐: llamafactory | 备选: axolotl
   timeout: 300
   max-retries: 3
+
+# ==================== RAG 配置 ====================
+rag:
+  retrieval:
+    top-k: 5
+    similarity-threshold: 0.7
+    enable-rerank: false
+  prompt:
+    system-instruction: |
+      你是一个专业的AI助手，基于提供的知识库内容回答用户问题。
+      请遵循以下规则：
+      1. 仅基于提供的上下文信息回答问题
+      2. 如果上下文中没有相关信息，请明确告知用户
+      3. 回答要准确、简洁、专业
+      4. 如果不确定，不要编造信息
 ```
 
-### 9.2 最小配置（快速开始）
+### 10.2 最小配置（快速开始）
 
 ```yaml
 # 仅需配置这三个即可运行
+spring:
+  profiles:
+    active: local
+
 embedding:
   provider: bge
 
@@ -775,10 +867,31 @@ vector:
 
 langchain4j:
   llm:
-    provider: qwen-ollama
+    provider: qwen
 ```
 
-### 9.3 环境变量配置
+### 10.3 Mock 模式最小配置
+
+```yaml
+spring:
+  profiles:
+    active: mock
+  main:
+    allow-bean-definition-overriding: true
+
+langchain4j:
+  llm:
+    provider: mock
+
+embedding:
+  provider: mock
+
+vector:
+  store:
+    provider: mock
+```
+
+### 10.4 环境变量配置
 
 ```bash
 # 生产环境建议通过环境变量注入敏感配置
@@ -786,6 +899,7 @@ export OLLAMA_BASE_URL=http://localhost:11434
 export QDRANT_HOST=localhost
 export QDRANT_PORT=6334
 export FINETUNE_SERVICE_URL=http://localhost:8000
+export OPENAI_API_KEY=sk-xxx
 
 # 应用启动时自动读取
 # spring-boot 会自动将环境变量映射到配置属性
@@ -793,9 +907,9 @@ export FINETUNE_SERVICE_URL=http://localhost:8000
 
 ---
 
-## 10. 切换指南
+## 11. 切换指南
 
-### 10.1 Embedding 切换
+### 11.1 Embedding 切换
 
 ```yaml
 # 切换到 bge-large-zh-v1.5（推荐）
@@ -820,7 +934,7 @@ langchain4j:
       model-name: text-embedding-3-large
 ```
 
-### 10.2 向量数据库切换
+### 11.2 向量数据库切换
 
 ```yaml
 # 切换到 Qdrant（推荐）
@@ -839,13 +953,13 @@ vector:
 > 2. 切换配置
 > 3. 导入到新数据库
 
-### 10.3 大模型切换
+### 11.3 大模型切换
 
 ```yaml
 # 切换到 Qwen2.5-14B（推荐，中文场景）
 langchain4j:
   llm:
-    provider: qwen-ollama
+    provider: qwen
 ollama:
   model-name: qwen2.5:14b
 
@@ -866,7 +980,7 @@ spring:
       api-key: sk-xxx
 ```
 
-### 10.4 微调框架切换
+### 11.4 微调框架切换
 
 ```yaml
 # 使用 LLaMA-Factory（推荐）
@@ -878,22 +992,32 @@ finetune:
   provider: axolotl
 ```
 
-### 10.5 降级策略
+### 11.5 降级策略
 
 ```yaml
 # 配置降级，当主服务不可用时自动切换
 langchain4j:
   llm:
-    provider: qwen-ollama
+    provider: qwen
     fallback-provider: llama   # Qwen 不可用时降级到 Llama
 
 # 如果本地模型都不可用，降级到 OpenAI（需要配置）
 # fallback-provider: openai
 ```
 
+### 11.6 切换至 Mock 模式
+
+```yaml
+spring:
+  profiles:
+    active: mock
+  main:
+    allow-bean-definition-overriding: true
+```
+
 ---
 
-## 11. 常见问题
+## 12. 常见问题
 
 ### Q1: Ollama 模型下载慢怎么办？
 
@@ -983,19 +1107,19 @@ curl http://localhost:8080/actuator/health
      model-name: my-finetuned-model
    ```
 
-### Q7: LangChain4j 0.36 与 0.27 的兼容性？
+### Q7: 项目默认启动就是 Mock 模式？
 
-**A**: 主要变化：
-- `StreamingResponseHandler` 接口保持不变 ✅
-- `ChatLanguageModel` 接口保持不变 ✅
-- 新增 `OllamaChatModel`、Ollama 相关类 ✅
-- 部分内部类包名可能调整 ⚠️
-
-如遇编译错误，检查：
-```xml
-<!-- 确保使用统一版本 -->
-<langchain4j.version>0.36.0</langchain4j.version>
+**A**: 是的。为了方便本地开发和调试，主 `application.yml` 默认激活 `mock` profile：
+```yaml
+spring:
+  profiles:
+    active: mock
 ```
+生产环境请务必切换为 `local` 或 `prod`。
+
+### Q8: 向量检索为空时会发生什么？
+
+**A**: `RAGServiceImpl.ragQuery()` 在检索结果为空时会**降级到普通问答模式**，直接由 LLM 回答用户问题，并保存对话历史。
 
 ---
 
@@ -1005,19 +1129,24 @@ curl http://localhost:8080/actuator/health
 
 | 文件 | 说明 |
 |------|------|
-| `mallchat-ai/pom.xml` | AI 模块父 POM，管理依赖版本 |
+| `mallchat-ai/pom.xml` | AI 模块父 POM，管理依赖版本（LangChain4j 0.36.0） |
 | `mallchat-ai-vector/pom.xml` | 向量模块，新增 Qdrant、Ollama 依赖 |
 | `mallchat-ai-llm/pom.xml` | LLM 模块，新增 Ollama 依赖 |
-| `QdrantVectorService.java` | Qdrant 向量服务实现 |
+| `QdrantVectorService.java` | Qdrant 向量服务实现（默认） |
 | `MilvusVectorService.java` | Milvus 向量服务实现（备选） |
 | `OllamaBgeEmbeddingService.java` | BGE Embedding 服务（推荐） |
 | `M3eEmbeddingService.java` | M3E Embedding 服务（备选） |
 | `OpenAIEmbeddingService.java` | OpenAI Embedding 服务（兼容） |
+| `MockEmbeddingService.java` | Mock Embedding 服务 |
 | `QwenLLMService.java` | Qwen2.5-14B LLM 服务（推荐） |
 | `LlamaLLMService.java` | Llama3-70B LLM 服务（备选） |
 | `OpenAILLMService.java` | OpenAI LLM 服务（兼容） |
 | `ChatGLMLLMService.java` | ChatGLM LLM 服务（兼容） |
+| `MockLLMService.java` | Mock LLM 服务 |
 | `LLMServiceFactory.java` | LLM 服务工厂，管理多提供商 |
+| `LangChain4jConfig.java` | OpenAI ChatModel / Tokenizer 配置 |
+| `application-mock.yml` | Mock 模式配置 |
+| `application-ai.yml` | AI 模块完整配置模板 |
 | `mallchat-ai-finetune/` | 微调框架模块 |
 
 ### B. 参考链接
@@ -1035,4 +1164,4 @@ curl http://localhost:8080/actuator/health
 
 ---
 
-*本文档由 AI Assistant 生成，如有问题请及时反馈。*
+*本文档由 AI Assistant 生成，版本 v2.1，最后更新 2026-06-13。如有问题请及时反馈。*

@@ -1,9 +1,10 @@
 # MallChat 项目 Review 与优化建议
 
 > **Review范围**: Java后端（mallchat-chat-server + mallchat-ai + mallchat-tools）  
-> **Review日期**: 2026-05-31  
+> **Review日期**: 2026-06-13  
 > **Review方式**: 静态代码分析 + 架构审视  
-> **建议原则**: 只说明优化方向，先不改代码，等确认后再实施
+> **建议原则**: 只说明优化方向，先不改代码，等确认后再实施  
+> **版本**: v1.1（随 AI 模块迁移到 Ollama+Qdrant 方案更新）
 
 ---
 
@@ -30,6 +31,7 @@
 | **缓存设计** | 多级缓存（Caffeine本地 + Redis远程），JetCache 统一管理，设计到位 |
 | **代码规范** | 注释详细，类职责单一，命名较规范 |
 | **扩展性** | 策略模式（MsgHandlerFactory、MsgMarkFactory）、适配器模式运用得当 |
+| **AI模块** | 已完成从 OpenAI/Milvus 到 Ollama/Qdrant 的本地开源迁移，Mock 模式完整 |
 
 ### 1.2 主要问题域
 
@@ -40,7 +42,8 @@
 | 异常处理不一致 | ⚠️ 中 | 部分代码吞异常，部分抛运行时异常 |
 | 重复代码 | ⚠️ 低 | 部分 DAO 层操作可抽象 |
 | 缺少单元测试 | ⚠️ 中 | 核心业务逻辑测试覆盖不足 |
-| Spring Boot版本偏旧 | ⚠️ 低 | 2.6.7，建议升级到 2.7.x 或 3.x |
+| Spring Boot版本偏旧 | ⚠️ 低 | 2.7.x，建议升级到 3.x |
+| 文档滞后 | ⚠️ 中 | 部分文档未及时随代码更新（正在逐步补齐） |
 
 ---
 
@@ -299,12 +302,13 @@ public void onMessage(MsgSendMessageDTO dto) {
 
 | 组件 | 当前版本 | 建议版本 | 升级收益 |
 |------|---------|---------|---------|
-| Spring Boot | 2.6.7 | 2.7.18 / 3.2.x | 性能提升、安全补丁、原生镜像支持 |
+| Spring Boot | 2.7.x | 3.2.x | 性能提升、安全补丁、原生镜像支持 |
 | MyBatis-Plus | 3.4.0 | 3.5.5 | 新特性、bug修复 |
 | Netty | 4.1.76 | 4.1.107 | 性能优化、安全修复 |
 | JDK | 17 | 17（保持） | LTS版本，无需升级 |
+| LangChain4j | 0.36.0 | 0.36.0（保持） | 已升级到支持 Ollama/Qdrant 的版本 |
 
-**注意**: Spring Boot 2.x -> 3.x 是重大升级（ Jakarta EE 命名空间变化），建议先升到 2.7.x 过渡
+**注意**: Spring Boot 2.x -> 3.x 是重大升级（ Jakarta EE 命名空间变化），建议先评估影响范围
 
 ---
 
@@ -314,8 +318,10 @@ public void onMessage(MsgSendMessageDTO dto) {
 
 **优化建议**:
 1. **核心逻辑单元测试**: `ChatServiceImpl.sendMsg()`、`MsgSendConsumer.onMessage()`
-2. **契约测试**: WebSocket 消息格式的 JSON Schema 校验
-3. **性能测试**: JMH 测试热点方法（如消息序列化）
+2. **AI模块单元测试**: `RAGServiceImpl.ragQuery()`、`AIAssistantServiceImpl.answerQuestion()`
+3. **Mock模式测试**: 利用 Mock 实现编写不依赖外部服务的测试
+4. **契约测试**: WebSocket 消息格式的 JSON Schema 校验
+5. **性能测试**: JMH 测试热点方法（如消息序列化）
 
 ---
 
@@ -343,9 +349,10 @@ wx:
 **现状**: 有 Actuator + Prometheus，但缺少业务指标
 
 **优化建议**:
-1. **业务指标**: 消息发送 QPS、WebSocket 在线数、消息延迟分位值
-2. **健康检查**: 自定义 HealthIndicator 检查 Redis、MySQL、RocketMQ
-3. **告警规则**: Prometheus Alertmanager 配置告警（如消息堆积 > 1000）
+1. **业务指标**: 消息发送 QPS、WebSocket 在线数、消息延迟分位值、AI 查询 QPS
+2. **AI业务指标**: 向量检索耗时、LLM 调用耗时、Embedding 批量耗时、缓存命中率
+3. **健康检查**: 自定义 HealthIndicator 检查 Redis、MySQL、RocketMQ、Ollama、Qdrant
+4. **告警规则**: Prometheus Alertmanager 配置告警（如消息堆积 > 1000）
 
 ---
 
@@ -362,9 +369,11 @@ mallchat-ai/                          # 新AI（RAG + LLM）
 **问题**: 两套 AI 代码并存，逻辑分散
 
 **优化建议**:
-1. **统一入口**: 将 `chatai` 包迁移到 `mallchat-ai` 模块
-2. **统一配置**: 合并 `ChatGPTProperties` / `ChatGLM2Properties` 到 `LLMConfig`
-3. **统一接口**: `IChatAIService` 与 `LLMService` 合并
+1. **统一入口**: 将 `chatai` 包迁移到 `mallchat-ai` 模块 ✅（部分已完成）
+2. **统一配置**: 合并 `ChatGPTProperties` / `ChatGLM2Properties` 到 `LLMConfig` ✅（建议继续推进）
+3. **统一接口**: `IChatAIService` 与 `LLMService` 合并 ✅（建议继续推进）
+
+**状态**: 新 AI 模块已独立成体系，旧 `chatai` 建议逐步下线或做兼容转发。
 
 ---
 
@@ -374,8 +383,9 @@ mallchat-ai/                          # 新AI（RAG + LLM）
 
 **优化建议**:
 1. **并发调用**: Embedding 和 上下文准备并行
-2. **缓存查询结果**: 相同问题的向量检索结果缓存 5 分钟
-3. **降级策略**: 向量库不可用时，直接走 LLM（可能精度下降，但保证可用）
+2. **缓存查询结果**: 相同问题的向量检索结果缓存 5 分钟（已实现 `QueryResultCache`）
+3. **降级策略**: 向量库不可用时，直接走 LLM（已实现 `fallbackToNormalQA`）
+4. **混合检索**: 引入 BM25 关键词检索，与向量检索结果融合
 
 ---
 
@@ -386,6 +396,18 @@ mallchat-ai/                          # 新AI（RAG + LLM）
 **优化建议**:
 1. **流水线并行**: 分块 -> Embedding（批量）-> 存储 流水线化
 2. **进度通知**: 大文档处理耗时，通过 WebSocket 推送进度给用户
+3. **批量索引**: 当前 `DocumentIndexingConsumer` 已支持批量，可进一步优化批次大小
+
+---
+
+### 6.4 向量库长期演进
+
+**现状**: Qdrant 作为默认向量库，Milvus 作为备选
+
+**优化建议**:
+1. **短中期**: 继续使用 Qdrant，利用动态向量优势
+2. **长期**: 如果数据量达到千万级以上，评估迁移到 Milvus 或引入 PGVector
+3. **多向量库抽象**: `VectorService` 接口已抽象，迁移成本可控
 
 ---
 
@@ -395,9 +417,10 @@ mallchat-ai/                          # 新AI（RAG + LLM）
 
 | 优化项 | 原因 |
 |--------|------|
-| 1. Mock模式验证启动 | 确保代码能跑通 |
+| 1. Mock模式验证启动 | 确保代码能跑通 ✅（已完成） |
 | 2. 统一异常处理 | 影响系统稳定性 |
 | 3. 空catch检查 | 隐藏bug风险 |
+| 4. 文档同步更新 | 防止知识滞后 ✅（本次已更新核心文档） |
 
 ### P1（建议本月做）
 
@@ -406,7 +429,8 @@ mallchat-ai/                          # 新AI（RAG + LLM）
 | 4. 循环依赖治理 | 影响代码可维护性 |
 | 5. 热门房间批量推送 | 性能瓶颈 |
 | 6. 基础DAO抽象 | 减少重复代码 |
-| 7. AI模块整合 | 消除代码冗余 |
+| 7. AI模块整合 | 消除代码冗余（持续推进） |
+| 8. AI模块单元测试 | 保证质量 |
 
 ### P2（建议三个月内）
 
@@ -416,6 +440,7 @@ mallchat-ai/                          # 新AI（RAG + LLM）
 | 9. 单元测试覆盖 | 质量保证 |
 | 10. 监控告警完善 | 运维能力 |
 | 11. 配置中心化 | 工程规范 |
+| 12. 混合检索 | RAG效果提升 |
 
 ### P3（长期规划）
 
@@ -424,6 +449,7 @@ mallchat-ai/                          # 新AI（RAG + LLM）
 | 12. 领域模型充血化 | 架构演进 |
 | 13. 读写分离 | 性能扩展 |
 | 14. 多活部署 | 高可用 |
+| 15. AI Agent框架 | 功能演进 |
 
 ---
 

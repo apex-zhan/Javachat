@@ -2,10 +2,10 @@
 
 ## 📋 文档信息
 
-- **版本**：v1.0
+- **版本**：v1.1
 - **创建时间**：2026-02-06
-- **最后更新**：2026-02-06
-- **作者**：Kiro
+- **最后更新**：2026-06-13
+- **作者**：Kiro / AI Assistant
 - **Base URL**：`http://localhost:8080/api`
 
 ---
@@ -23,11 +23,11 @@
 
 ### 1.1 上传文档
 
-**接口描述**：上传知识库文档，支持 PDF、DOCX、TXT 等格式
+**接口描述**：上传知识库文档，支持 PDF、DOCX、TXT、MD、HTML 等格式
 
 **请求方式**：`POST`
 
-**请求路径**：`/document/upload`
+**请求路径**：`/documents/upload`
 
 **Content-Type**：`multipart/form-data`
 
@@ -38,15 +38,17 @@
 | file | File | 是 | 文档文件 |
 | title | String | 是 | 文档标题 |
 | userId | Long | 是 | 用户ID |
+| description | String | 否 | 文档描述 |
 
 **请求示例**：
 
 ```bash
-curl -X POST "http://localhost:8080/api/document/upload" \
+curl -X POST "http://localhost:8080/api/documents/upload" \
   -H "Content-Type: multipart/form-data" \
   -F "file=@/path/to/document.pdf" \
   -F "title=产品使用手册" \
-  -F "userId=10001"
+  -F "userId=10001" \
+  -F "description=产品使用手册 v1.0"
 ```
 
 **响应参数**：
@@ -78,6 +80,7 @@ curl -X POST "http://localhost:8080/api/document/upload" \
 | 错误码 | 说明 |
 |--------|------|
 | 400 | 参数错误（文件为空、格式不支持、大小超限） |
+| 429 | 上传过于频繁 |
 | 500 | 服务器内部错误 |
 
 ---
@@ -88,7 +91,7 @@ curl -X POST "http://localhost:8080/api/document/upload" \
 
 **请求方式**：`PUT`
 
-**请求路径**：`/document/{documentId}`
+**请求路径**：`/documents/{documentId}`
 
 **Content-Type**：`multipart/form-data`
 
@@ -104,14 +107,17 @@ curl -X POST "http://localhost:8080/api/document/upload" \
 |--------|------|------|------|
 | file | File | 是 | 新文档文件 |
 | title | String | 是 | 新文档标题 |
+| userId | Long | 是 | 用户ID |
+| description | String | 否 | 文档描述 |
 
 **请求示例**：
 
 ```bash
-curl -X PUT "http://localhost:8080/api/document/12345" \
+curl -X PUT "http://localhost:8080/api/documents/12345" \
   -H "Content-Type: multipart/form-data" \
   -F "file=@/path/to/new_document.pdf" \
-  -F "title=产品使用手册v2"
+  -F "title=产品使用手册v2" \
+  -F "userId=10001"
 ```
 
 **响应参数**：
@@ -144,6 +150,7 @@ curl -X PUT "http://localhost:8080/api/document/12345" \
 |--------|------|
 | 400 | 参数错误 |
 | 404 | 文档不存在 |
+| 429 | 上传过于频繁 |
 | 500 | 服务器内部错误 |
 
 ---
@@ -154,7 +161,7 @@ curl -X PUT "http://localhost:8080/api/document/12345" \
 
 **请求方式**：`DELETE`
 
-**请求路径**：`/document/{documentId}`
+**请求路径**：`/documents/{documentId}`
 
 **路径参数**：
 
@@ -165,7 +172,7 @@ curl -X PUT "http://localhost:8080/api/document/12345" \
 **请求示例**：
 
 ```bash
-curl -X DELETE "http://localhost:8080/api/document/12345"
+curl -X DELETE "http://localhost:8080/api/documents/12345"
 ```
 
 **响应示例**：
@@ -193,7 +200,7 @@ curl -X DELETE "http://localhost:8080/api/document/12345"
 
 **请求方式**：`GET`
 
-**请求路径**：`/document/{documentId}/status`
+**请求路径**：`/documents/{documentId}/status`
 
 **路径参数**：
 
@@ -204,7 +211,7 @@ curl -X DELETE "http://localhost:8080/api/document/12345"
 **请求示例**：
 
 ```bash
-curl -X GET "http://localhost:8080/api/document/12345/status"
+curl -X GET "http://localhost:8080/api/documents/12345/status"
 ```
 
 **响应参数**：
@@ -244,15 +251,17 @@ curl -X GET "http://localhost:8080/api/document/12345/status"
 
 ## 2. RAG 查询接口
 
-### 2.1 RAG 问答查询
+### 2.1 简化流式 RAG 查询
 
-**接口描述**：基于知识库的智能问答
+**接口描述**：基于知识库的智能问答，直接返回文本流（由 `DocumentController` 提供）
 
 **请求方式**：`POST`
 
-**请求路径**：`/rag/query`
+**请求路径**：`/documents/query`
 
 **Content-Type**：`application/json`
+
+**Accept**：`text/event-stream`
 
 **请求参数**：
 
@@ -262,51 +271,32 @@ curl -X GET "http://localhost:8080/api/document/12345/status"
 | userId | Long | 是 | 用户ID |
 | documentId | Long | 否 | 指定文档ID（不填则搜索全部） |
 | topK | Integer | 否 | 返回相关片段数量（默认5） |
-| temperature | Double | 否 | LLM 温度参数（默认0.7） |
 
 **请求示例**：
 
 ```bash
-curl -X POST "http://localhost:8080/api/rag/query" \
+curl -X POST "http://localhost:8080/api/documents/query" \
   -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
   -d '{
     "question": "如何使用产品的高级功能？",
     "userId": 10001,
     "documentId": 12345,
-    "topK": 5,
-    "temperature": 0.7
+    "topK": 5
   }'
 ```
 
-**响应参数**：
-
-| 参数名 | 类型 | 说明 |
-|--------|------|------|
-| answer | String | AI 回答 |
-| retrievedChunks | Array | 检索到的相关片段 |
-| responseTime | Long | 响应时间（毫秒） |
-| conversationId | Long | 对话ID |
+**响应格式**：SSE 文本流，每个数据块为一个 token 字符串
 
 **响应示例**：
 
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "answer": "产品的高级功能包括...",
-    "retrievedChunks": [
-      {
-        "chunkId": 1001,
-        "content": "高级功能使用说明...",
-        "score": 0.95,
-        "documentId": 12345
-      }
-    ],
-    "responseTime": 1250,
-    "conversationId": 67890
-  }
-}
+```
+产品
+的
+高级
+功能
+包括
+...
 ```
 
 **错误码**：
@@ -323,9 +313,9 @@ curl -X POST "http://localhost:8080/api/rag/query" \
 
 ## 3. 流式输出接口
 
-### 3.1 流式 RAG 查询
+### 3.1 标准 SSE 流式 RAG 查询
 
-**接口描述**：使用 SSE (Server-Sent Events) 流式返回 RAG 查询结果
+**接口描述**：使用 SSE (Server-Sent Events) 流式返回 RAG 查询结果，包含心跳、结束标记和错误事件
 
 **请求方式**：`POST`
 
@@ -353,7 +343,8 @@ curl -X POST "http://localhost:8080/api/stream/rag/query" \
   -d '{
     "question": "如何使用产品的高级功能？",
     "userId": 10001,
-    "documentId": 12345
+    "documentId": 12345,
+    "topK": 5
   }'
 ```
 
@@ -366,23 +357,23 @@ curl -X POST "http://localhost:8080/api/stream/rag/query" \
 | message | 内容数据块 |
 | done | 流结束标记 |
 | error | 错误信息 |
-| heartbeat | 心跳消息 |
-| timeout | 超时通知 |
+| heartbeat | 心跳消息（每 30 秒） |
+| timeout | 超时通知（300 秒无活动） |
 
 **响应示例**：
 
 ```
 event: message
-data: {"index":0,"type":"content","content":"产品的高级功能"}
+data: {"index":0,"content":"产品的高级功能","finished":false,"timestamp":1234567890}
 
 event: message
-data: {"index":1,"type":"content","content":"包括..."}
+data: {"index":1,"content":"包括...","finished":false,"timestamp":1234567891}
 
 event: message
-data: {"index":2,"type":"content","content":"详细说明如下..."}
+data: {"index":2,"content":"详细说明如下...","finished":false,"timestamp":1234567892}
 
 event: done
-data: {"index":3,"type":"end","content":""}
+data: {"index":3,"content":"","finished":true,"timestamp":1234567893}
 ```
 
 **StreamChunk 数据结构**：
@@ -390,8 +381,9 @@ data: {"index":3,"type":"end","content":""}
 ```json
 {
   "index": 0,           // 数据块索引
-  "type": "content",    // 类型：content/end/error/heartbeat
   "content": "文本内容", // 内容
+  "finished": false,    // 是否结束
+  "error": null,        // 错误信息
   "timestamp": 1234567890 // 时间戳
 }
 ```
@@ -425,7 +417,7 @@ eventSource.addEventListener('done', (event) => {
 
 eventSource.addEventListener('error', (event) => {
   const error = JSON.parse(event.data);
-  console.error('发生错误:', error.content);
+  console.error('发生错误:', error.error);
   eventSource.close();
 });
 
@@ -479,15 +471,15 @@ curl -X GET "http://localhost:8080/api/stream/test" \
 
 ```
 event: message
-data: {"index":0,"type":"content","content":"测试消息 0"}
+data: {"index":0,"content":"测试消息 0","finished":false,"timestamp":1234567890}
 
 event: message
-data: {"index":1,"type":"content","content":"测试消息 1"}
+data: {"index":1,"content":"测试消息 1","finished":false,"timestamp":1234567891}
 
 ...
 
 event: done
-data: {"index":10,"type":"end","content":""}
+data: {"index":10,"content":"","finished":true,"timestamp":1234567900}
 ```
 
 ---
@@ -543,16 +535,16 @@ Authorization: Bearer {access_token}
 
 | 接口类型 | 限流规则 |
 |---------|---------|
-| 文档上传 | 10次/分钟/用户 |
-| RAG 查询 | 60次/分钟/用户 |
-| 流式查询 | 30次/分钟/用户 |
+| 文档上传 | 10次/小时/用户，50次/天/用户 |
+| RAG 查询 | 10次/分钟/用户，100次/小时/用户，500次/天/用户 |
+| 智能问答 | 20次/分钟/用户，200次/小时/用户 |
 
 ### 4.5 文档格式支持
 
 | 格式 | 扩展名 | 最大大小 |
 |------|--------|---------|
-| PDF | .pdf | 50MB |
-| Word | .docx, .doc | 50MB |
+| PDF | .pdf | 10MB |
+| Word | .docx, .doc | 10MB |
 | 文本 | .txt | 10MB |
 | Markdown | .md | 10MB |
 | HTML | .html, .htm | 10MB |
@@ -562,8 +554,12 @@ Authorization: Bearer {access_token}
 | 操作类型 | 超时时间 |
 |---------|---------|
 | 文档上传 | 60秒 |
-| RAG 查询 | 30秒 |
-| 流式查询 | 300秒（5分钟） |
+| 文档处理 | 300秒 |
+| 文档索引 | 600秒 |
+| 向量检索 | 10秒 |
+| LLM 调用 | 60-120秒 |
+| RAG 查询 | 90秒 |
+| 流式查询连接 | 300秒 |
 
 ### 4.7 分页参数
 
@@ -576,6 +572,15 @@ Authorization: Bearer {access_token}
 | sortBy | String | createTime | 排序字段 |
 | sortOrder | String | desc | 排序方向（asc/desc） |
 
+### 4.8 Mock 模式说明
+
+当使用 `spring.profiles.active=mock` 启动时：
+
+- LLM 返回固定模拟回复
+- Embedding 返回确定性伪随机向量
+- 向量存储使用内存实现
+- 适合本地开发和接口测试
+
 ---
 
 ## 5. 使用示例
@@ -584,7 +589,7 @@ Authorization: Bearer {access_token}
 
 ```bash
 # 1. 上传文档
-DOCUMENT_ID=$(curl -X POST "http://localhost:8080/api/document/upload" \
+DOCUMENT_ID=$(curl -X POST "http://localhost:8080/api/documents/upload" \
   -H "Authorization: Bearer {token}" \
   -H "Content-Type: multipart/form-data" \
   -F "file=@document.pdf" \
@@ -596,7 +601,7 @@ echo "文档ID: $DOCUMENT_ID"
 
 # 2. 轮询检查索引状态
 while true; do
-  STATUS=$(curl -X GET "http://localhost:8080/api/document/$DOCUMENT_ID/status" \
+  STATUS=$(curl -X GET "http://localhost:8080/api/documents/$DOCUMENT_ID/status" \
     -H "Authorization: Bearer {token}" \
     | jq -r '.data.indexStatus')
   
@@ -613,10 +618,22 @@ while true; do
   sleep 5
 done
 
-# 3. 执行 RAG 查询
-curl -X POST "http://localhost:8080/api/rag/query" \
+# 3. 执行 RAG 查询（简化流式）
+curl -X POST "http://localhost:8080/api/documents/query" \
   -H "Authorization: Bearer {token}" \
   -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d "{
+    \"question\": \"如何使用产品？\",
+    \"userId\": 10001,
+    \"documentId\": $DOCUMENT_ID
+  }"
+
+# 4. 或执行标准 SSE 查询
+curl -X POST "http://localhost:8080/api/stream/rag/query" \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
   -d "{
     \"question\": \"如何使用产品？\",
     \"userId\": 10001,
@@ -638,11 +655,13 @@ class RAGClient:
             'Content-Type': 'application/json'
         }
     
-    def upload_document(self, file_path, title, user_id):
+    def upload_document(self, file_path, title, user_id, description=None):
         """上传文档"""
-        url = f'{self.base_url}/document/upload'
+        url = f'{self.base_url}/documents/upload'
         files = {'file': open(file_path, 'rb')}
         data = {'title': title, 'userId': user_id}
+        if description:
+            data['description'] = description
         
         response = requests.post(url, files=files, data=data, 
                                 headers={'Authorization': self.headers['Authorization']})
@@ -650,13 +669,13 @@ class RAGClient:
     
     def check_status(self, document_id):
         """检查索引状态"""
-        url = f'{self.base_url}/document/{document_id}/status'
+        url = f'{self.base_url}/documents/{document_id}/status'
         response = requests.get(url, headers=self.headers)
         return response.json()
     
     def query(self, question, user_id, document_id=None, top_k=5):
-        """RAG 查询"""
-        url = f'{self.base_url}/rag/query'
+        """RAG 简化流式查询"""
+        url = f'{self.base_url}/documents/query'
         data = {
             'question': question,
             'userId': user_id,
@@ -664,20 +683,24 @@ class RAGClient:
             'topK': top_k
         }
         
-        response = requests.post(url, json=data, headers=self.headers)
-        return response.json()
+        response = requests.post(url, json=data, headers=self.headers, stream=True)
+        for chunk in response.iter_content(chunk_size=None):
+            if chunk:
+                yield chunk.decode('utf-8')
     
-    def stream_query(self, question, user_id, document_id=None):
-        """流式查询"""
+    def stream_query(self, question, user_id, document_id=None, top_k=5):
+        """标准 SSE 流式查询"""
         url = f'{self.base_url}/stream/rag/query'
         data = {
             'question': question,
             'userId': user_id,
-            'documentId': document_id
+            'documentId': document_id,
+            'topK': top_k
         }
         
         response = requests.post(url, json=data, headers=self.headers, stream=True)
         
+        buffer = ""
         for line in response.iter_lines():
             if line:
                 line = line.decode('utf-8')
@@ -692,14 +715,16 @@ client = RAGClient('http://localhost:8080/api', 'your_token')
 result = client.upload_document('document.pdf', '产品手册', 10001)
 document_id = result['data']['documentId']
 
-# 查询
-result = client.query('如何使用产品？', 10001, document_id)
-print(result['data']['answer'])
+# 简化流式查询
+for chunk in client.query('如何使用产品？', 10001, document_id):
+    print(chunk, end='', flush=True)
 
-# 流式查询
+# 标准 SSE 查询
 for chunk in client.stream_query('如何使用产品？', 10001, document_id):
-    if chunk['type'] == 'content':
-        print(chunk['content'], end='', flush=True)
+    if chunk.get('error'):
+        print(f"错误: {chunk['error']}")
+    elif not chunk.get('finished'):
+        print(chunk.get('content', ''), end='', flush=True)
 ```
 
 ---
@@ -711,9 +736,9 @@ for chunk in client.stream_query('如何使用产品？', 10001, document_id):
 A: 文档上传后会异步进行索引处理，处理时间取决于文档大小和内容复杂度。通常：
 - 小文档（<1MB）：10-30秒
 - 中等文档（1-10MB）：30-120秒
-- 大文档（10-50MB）：2-5分钟
+- 大文档（10MB+）：2-5分钟
 
-可以通过 `/document/{documentId}/status` 接口查询索引状态。
+可以通过 `/documents/{documentId}/status` 接口查询索引状态。
 
 ### Q2: 如何提高查询准确度？
 
@@ -726,14 +751,14 @@ A: 可以通过以下方式提高准确度：
 ### Q3: 流式查询如何处理超时？
 
 A: 流式查询有以下超时机制：
-- 连接超时：300秒（5分钟）
+- 连接超时：300秒
 - 心跳间隔：30秒
 - 超时后会收到 `timeout` 事件，客户端应关闭连接
 
 ### Q4: 如何处理并发查询？
 
 A: 系统支持并发查询，但有限流保护：
-- 单用户：60次/分钟
+- 单用户：10次/分钟（RAG）
 - 建议使用连接池复用连接
 - 对于高并发场景，建议使用缓存
 
@@ -747,11 +772,21 @@ A: 文档删除是硬删除，无法恢复。删除操作会：
 
 建议在删除前做好备份。
 
+### Q6: `/documents/query` 和 `/stream/rag/query` 有什么区别？
+
+A: 
+- `/documents/query`：简化流式接口，直接返回文本流，无 SSE 事件封装。
+- `/stream/rag/query`：标准 SSE 接口，包含 `message`/`done`/`error`/`heartbeat`/`timeout` 事件，适合生产环境前端对接。
+
 ---
 
 ## 📝 更新日志
 
 | 日期 | 版本 | 更新内容 | 更新人 |
 |------|------|---------|--------|
+| 2026-06-13 | v1.1 | 接口路径统一为 `/api/documents/*`；增加标准 SSE 接口说明；更新限流、超时、文档格式、Mock 模式说明 | AI Assistant |
 | 2026-02-06 | v1.0 | 创建 API 文档 | Kiro |
 
+---
+
+*本文档由 AI Assistant 维护，如有问题请及时反馈。*

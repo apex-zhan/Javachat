@@ -1,13 +1,21 @@
 # AI助手RAG系统 - 技术实现详解
 
+> **⚠️ 文档更新提示**：本文档为 RAG 系统技术实现速查版，随代码从 OpenAI/Milvus 方案迁移到 **Ollama + Qdrant + bge + Qwen** 本地开源方案后已同步更新。完整技术方案、部署指南和接口文档请参见：
+> - [mallchat-ai/docs/AI技术方案.md](../mallchat-ai/docs/AI技术方案.md)
+> - [mallchat-ai/mallchat-ai-rag/docs/架构设计详解.md](../mallchat-ai/mallchat-ai-rag/docs/架构设计详解.md)
+> - [mallchat-ai/mallchat-ai-rag/docs/API接口文档.md](../mallchat-ai/mallchat-ai-rag/docs/API接口文档.md)
+> - [mallchat-ai/mallchat-ai-rag/docs/部署运维指南.md](../mallchat-ai/mallchat-ai-rag/docs/部署运维指南.md)
+
+---
+
 ## 📋 目录
 
-1. [项目概述](#项目概述)
-2. [核心技术架构](#核心技术架构)
-3. [依赖管理与迁移](#依赖管理与迁移)
-4. [模块详解](#模块详解)
-5. [核心功能实现](#核心功能实现)
-6. [面试准备](#面试准备)
+1. [项目概述](#1-项目概述)
+2. [核心技术架构](#2-核心技术架构)
+3. [依赖管理与迁移](#3-依赖管理与迁移)
+4. [核心模块实现](#4-核心模块实现)
+5. [RAG 查询流程详解](#5-rag-查询流程详解)
+6. [面试准备](#6-面试准备)
 
 ---
 
@@ -19,23 +27,27 @@ MallChat AI助手RAG系统是一个基于检索增强生成（Retrieval-Augmente
 
 ### 1.2 技术栈
 
-- **后端框架**: Spring Boot 2.6.13
-- **AI框架**: LangChain4j（替代Spring AI）
-- **向量数据库**: Milvus 2.3.x
-- **大语言模型**: OpenAI GPT-3.5/GPT-4
+- **后端框架**: Spring Boot 2.7.x
+- **AI框架**: LangChain4j 0.36.0（替代Spring AI）
+- **向量数据库**: Qdrant 1.8+（默认，动态向量）；Milvus 2.3+（备选）
+- **大语言模型**: Qwen2.5-14B / Llama3-70B via Ollama；OpenAI / ChatGLM 兼容
+- **Embedding模型**: bge-large-zh-v1.5（1024维）/ m3e-base（768维）
 - **文档处理**: Apache Tika
 - **消息队列**: RocketMQ
 - **缓存**: JetCache (Redis + Caffeine)
 - **响应式编程**: Project Reactor
+- **Mock模式**: 完整 Mock 实现，无需外部依赖即可启动
 
 ### 1.3 核心特性
 
-✅ **流式响应**: 基于Reactor实现的实时流式输出  
-✅ **向量检索**: Milvus向量数据库高性能检索  
-✅ **文档处理**: 支持PDF、Word、TXT等多种格式  
+✅ **流式响应**: 基于Reactor + SSE实现的实时流式输出  
+✅ **向量检索**: Qdrant动态向量，兼容多种Embedding维度  
+✅ **文档处理**: 支持PDF、Word、TXT、MD、HTML等多种格式  
 ✅ **异步索引**: RocketMQ异步文档索引处理  
 ✅ **熔断降级**: Resilience4j实现的服务保护  
-✅ **限流控制**: 基于Redis的分布式限流
+✅ **限流控制**: 基于Redis的分布式限流  
+✅ **多轮对话**: AI助手支持sessionId会话管理  
+✅ **Mock模式**: 本地无依赖启动
 
 ---
 
@@ -51,27 +63,31 @@ MallChat AI助手RAG系统是一个基于检索增强生成（Retrieval-Augmente
                      │
 ┌────────────────────▼────────────────────────────────────────┐
 │                  Controller Layer                            │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ RAGController│  │DocumentCtrl  │  │ ChatCtrl     │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐ │
+│  │ AIAssistant  │  │DocumentCtrl  │  │ StreamController │ │
+│  │  Controller  │  │  /documents/* │  │  /stream/*       │ │
+│  └──────────────┘  └──────────────┘  └──────────────────┘ │
 └────────────────────┬────────────────────────────────────────┘
                      │
 ┌────────────────────▼────────────────────────────────────────┐
 │                   Service Layer                              │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ RAGService   │  │DocumentProc  │  │ LLMService   │      │
+│  │ AIAssistant  │  │ RAGService   │  │ LLMService   │      │
+│  │   Service    │  │              │  │   Factory    │      │
 │  └──────────────┘  └──────────────┘  └──────────────┘      │
 └────────────────────┬────────────────────────────────────────┘
                      │
 ┌────────────────────┴────────────────────────────────────────┐
 │              Infrastructure Layer                            │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ Milvus Vector│  │ RocketMQ     │  │ Redis Cache  │      │
-│  │   Database   │  │   Queue      │  │  (JetCache)  │      │
+│  │ Qdrant       │  │ RocketMQ     │  │ Redis Cache  │      │
+│  │   Vector     │  │   Queue      │  │  (JetCache)  │      │
+│  │   Database   │  │              │  │              │      │
 │  └──────────────┘  └──────────────┘  └──────────────┘      │
-│  ┌──────────────┐  ┌──────────────┐                        │
-│  │ OpenAI API   │  │ MySQL DB     │                        │
-│  └──────────────┘  └──────────────┘                        │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │ Ollama       │  │ MySQL DB     │  │ Milvus       │      │
+│  │ (LLM/Embed)  │  │              │  │ 备选         │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -83,7 +99,8 @@ mallchat-ai/
 ├── mallchat-ai-llm/         # LLM服务模块
 ├── mallchat-ai-vector/      # 向量服务模块
 ├── mallchat-ai-rag/         # RAG核心模块
-└── mallchat-ai-assistant/   # AI助手模块
+├── mallchat-ai-assistant/   # AI助手模块
+└── mallchat-ai-finetune/    # 微调框架模块
 ```
 
 ---
@@ -92,23 +109,12 @@ mallchat-ai/
 
 ### 3.1 为什么从Spring AI迁移到LangChain4j？
 
-#### 问题背景
+项目初期考虑过Spring AI，但遇到以下问题：
 
-项目初期使用Spring AI，但遇到以下问题：
-
-1. **依赖冲突**: Spring AI与Spring Boot 2.6.x版本不兼容
+1. **依赖冲突**: Spring AI与Spring Boot 2.x版本不兼容
 2. **功能限制**: Spring AI功能较新，生态不够成熟
 3. **文档缺失**: 官方文档不完善，社区支持有限
-
-#### 迁移优势
-
-| 对比项            | Spring AI | LangChain4j |
-| ----------------- | --------- | ----------- |
-| Spring Boot兼容性 | 需要3.x   | 支持2.x     |
-| 功能完整度        | 基础功能  | 功能丰富    |
-| 社区活跃度        | 较新      | 活跃        |
-| 文档质量          | 一般      | 优秀        |
-| 流式支持          | 有限      | 完善        |
+4. **本地模型支持弱**: 对 Ollama、本地 Embedding 支持不如 LangChain4j
 
 ### 3.2 核心依赖配置
 
@@ -116,8 +122,10 @@ mallchat-ai/
 
 ```xml
 <properties>
-    <langchain4j.version>0.27.1</langchain4j.version>
-    <milvus.version>2.3.4</milvus.version>
+    <langchain4j.version>0.36.0</langchain4j.version>
+    <langchain4j-spring-boot.version>0.36.0</langchain4j-spring-boot.version>
+    <milvus-sdk.version>2.3.4</milvus-sdk.version>
+    <qdrant-java-client.version>1.14.0</qdrant-java-client.version>
     <tika.version>2.9.1</tika.version>
 </properties>
 
@@ -137,49 +145,26 @@ mallchat-ai/
             <version>${langchain4j.version}</version>
         </dependency>
 
-        <!-- LangChain4j Embeddings -->
+        <!-- LangChain4j Ollama -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-embeddings</artifactId>
+            <artifactId>langchain4j-ollama</artifactId>
             <version>${langchain4j.version}</version>
+        </dependency>
+
+        <!-- Qdrant -->
+        <dependency>
+            <groupId>io.qdrant</groupId>
+            <artifactId>qdrant-java-client</artifactId>
+            <version>${qdrant-java-client.version}</version>
         </dependency>
     </dependencies>
 </dependencyManagement>
 ```
 
-### 3.3 迁移步骤
-
-#### Step 1: 删除Spring AI依赖
-
-```bash
-# 删除所有Spring AI相关依赖
-# 删除 SpringAIConfig.java 配置类
-```
-
-#### Step 2: 添加LangChain4j依赖
-
-```xml
-<dependency>
-    <groupId>dev.langchain4j</groupId>
-    <artifactId>langchain4j</artifactId>
-</dependency>
-<dependency>
-    <groupId>dev.langchain4j</groupId>
-    <artifactId>langchain4j-open-ai</artifactId>
-</dependency>
-```
-
-#### Step 3: 修改配置类
-
-创建 `LangChain4jConfig.java` 替代原有配置
-
-#### Step 4: 重构Service层
-
-将Spring AI的API调用改为LangChain4j API
-
 ---
 
-## 4. 模块详解
+## 4. 核心模块实现
 
 ### 4.1 mallchat-ai-llm 模块
 
@@ -189,238 +174,105 @@ mallchat-ai/
 - 提供流式和非流式接口
 - Token计数和管理
 - 熔断降级处理
+- 多提供商切换（Qwen/Llama/OpenAI/ChatGLM/Mock）
 
 #### 4.1.2 核心类结构
 
 ```java
 com.abin.mallchat.ai.llm/
 ├── config/
-│   ├── LangChain4jConfig.java      # LangChain4j配置
+│   ├── LangChain4jConfig.java      # OpenAI配置
 │   └── LLMConfig.java               # LLM参数配置
 ├── service/
 │   ├── LLMService.java              # LLM服务接口
+│   ├── LLMServiceFactory.java       # LLM服务工厂
 │   └── impl/
-│       └── OpenAILLMService.java    # OpenAI实现
+│       ├── QwenLLMService.java      # Qwen via Ollama（推荐）
+│       ├── LlamaLLMService.java     # Llama via Ollama
+│       ├── OpenAILLMService.java    # OpenAI兼容
+│       ├── ChatGLMLLMService.java   # 智谱AI
+│       └── MockLLMService.java      # Mock模式
 ├── domain/
-│   └── LLMOptions.java              # LLM调用选项
+│   ├── LLMOptions.java              # LLM调用选项
+│   └── LLMProvider.java             # LLM提供商枚举
 └── exception/
-    └── LLMApiException.java         # LLM异常
+    ├── LLMException.java
+    └── LLMApiException.java
 ```
 
-#### 4.1.3 LangChain4jConfig 配置详解
+#### 4.1.3 LLMService 接口
 
 ```java
-@Configuration
-public class LangChain4jConfig {
+public interface LLMService {
+    Flux<String> streamChat(String prompt, LLMOptions options);
+    String chat(String prompt, LLMOptions options);
+    Flux<String> streamChat(List<ChatMessage> messages, LLMOptions options);
+    String chat(List<ChatMessage> messages, LLMOptions options);
+    int countTokens(String text);
+}
+```
 
-    @Value("${langchain4j.openai.api-key}")
-    private String apiKey;
+#### 4.1.4 QwenLLMService 核心实现
 
-    @Value("${langchain4j.openai.base-url:https://api.openai.com/v1}")
+```java
+@Slf4j
+@Service
+@Profile("!mock")
+@ConditionalOnProperty(name = "langchain4j.llm.provider", havingValue = "qwen")
+public class QwenLLMService implements LLMService {
+
+    @Value("${ollama.base-url:http://localhost:11434}")
     private String baseUrl;
 
-    /**
-     * 配置同步 Chat Language Model
-     * 用于非流式的 LLM 调用
-     */
-    @Bean
-    public ChatLanguageModel chatLanguageModel() {
-        return OpenAiChatModel.builder()
-                .apiKey(apiKey)
+    @Value("${ollama.model-name:qwen2.5:14b}")
+    private String modelName;
+
+    private ChatLanguageModel chatModel;
+    private StreamingChatLanguageModel streamingChatModel;
+
+    @PostConstruct
+    public void init() {
+        this.chatModel = OllamaChatModel.builder()
                 .baseUrl(baseUrl)
-                .modelName("gpt-3.5-turbo")
-                .temperature(0.7)
-                .maxTokens(2000)
-                .timeout(Duration.ofSeconds(60))
-                .maxRetries(3)
-                .logRequests(true)
-                .logResponses(false)
+                .modelName(modelName)
+                .temperature(temperature)
+                .timeout(timeout)
+                .build();
+
+        this.streamingChatModel = OllamaStreamingChatModel.builder()
+                .baseUrl(baseUrl)
+                .modelName(modelName)
+                .temperature(temperature)
+                .timeout(timeout)
                 .build();
     }
 
-    /**
-     * 配置流式 Chat Language Model
-     * 用于流式输出的 LLM 调用
-     */
-    @Bean
-    public StreamingChatLanguageModel streamingChatLanguageModel() {
-        return OpenAiStreamingChatModel.builder()
-                .apiKey(apiKey)
-                .baseUrl(baseUrl)
-                .modelName("gpt-3.5-turbo")
-                .temperature(0.7)
-                .maxTokens(2000)
-                .timeout(Duration.ofSeconds(60))
-                .logRequests(true)
-                .logResponses(false)
-                .build();
-    }
-
-    /**
-     * 配置 OpenAI Tokenizer
-     * 用于估算文本的 token 数量
-     */
-    @Bean
-    public OpenAiTokenizer openAiTokenizer() {
-        return new OpenAiTokenizer("gpt-3.5-turbo");
-    }
-}
-```
-
-**关键配置说明**:
-
-- `apiKey`: OpenAI API密钥
-- `baseUrl`: API基础URL（支持代理）
-- `temperature`: 控制输出随机性（0-2，越高越随机）
-- `maxTokens`: 最大输出token数
-- `timeout`: 请求超时时间
-- `maxRetries`: 失败重试次数
-
-#### 4.1.4 OpenAILLMService 实现详解
-
-```java
-@Service
-public class OpenAILLMService implements LLMService {
-
-    @Autowired
-    private ChatLanguageModel chatLanguageModel;
-
-    @Autowired
-    private StreamingChatLanguageModel streamingChatLanguageModel;
-
-    @Autowired
-    private OpenAiTokenizer tokenizer;
-
-    /**
-     * 流式调用 LLM
-     * 使用 Reactor Flux 实现流式响应
-     */
     @Override
     @CircuitBreaker(name = "llmService", fallbackMethod = "streamChatFallback")
-    @Retryable(value = {LLMApiException.class}, maxAttempts = 3)
+    @Retryable(value = {LLMApiException.class}, maxAttempts = 3,
+               backoff = @Backoff(delay = 1000, multiplier = 2))
     public Flux<String> streamChat(String prompt, LLMOptions options) {
         return Flux.create(sink -> {
-            streamingChatLanguageModel.generate(
-                prompt,
-                new StreamingResponseHandler<AiMessage>() {
-                    @Override
-                    public void onNext(String token) {
-                        if (token != null && !token.isEmpty()) {
-                            sink.next(token);  // 实时推送token
-                        }
-                    }
-
-                    @Override
-                    public void onComplete(Response<AiMessage> response) {
-                        sink.complete();  // 完成流
-                    }
-
-                    @Override
-                    public void onError(Throwable error) {
-                        sink.error(new LLMApiException("Stream chat failed", error));
+            streamingChatModel.generate(prompt, new StreamingResponseHandler<AiMessage>() {
+                @Override
+                public void onNext(String token) {
+                    if (token != null && !token.isEmpty()) {
+                        sink.next(token);
                     }
                 }
-            );
-        });
-    }
-
-    /**
-     * 非流式调用 LLM
-     */
-    @Override
-    @CircuitBreaker(name = "llmService", fallbackMethod = "chatFallback")
-    @Retryable(value = {LLMApiException.class}, maxAttempts = 3)
-    public String chat(String prompt, LLMOptions options) {
-        String response = chatLanguageModel.generate(prompt);
-
-        if (response != null && !response.isEmpty()) {
-            return response;
-        }
-
-        throw new LLMApiException("Empty response from LLM");
-    }
-
-    /**
-     * 计算 token 数量
-     */
-    @Override
-    public int countTokens(String text) {
-        if (text == null || text.isEmpty()) {
-            return 0;
-        }
-
-        try {
-            return tokenizer.estimateTokenCountInText(text);
-        } catch (Exception e) {
-            // 降级方案：简单估算
-            return estimateTokensSimple(text);
-        }
-    }
-
-    /**
-     * 简单的 token 估算算法（降级方案）
-     */
-    private int estimateTokensSimple(String text) {
-        int chineseCount = 0;
-        int englishWords = 0;
-
-        for (char c : text.toCharArray()) {
-            if (c >= 0x4E00 && c <= 0x9FA5) {
-                chineseCount++;
-            }
-        }
-
-        String[] words = text.split("\\s+");
-        for (String word : words) {
-            if (word.matches("[a-zA-Z]+")) {
-                englishWords++;
-            }
-        }
-
-        // 中文：1字符≈1.5 token，英文：1单词≈1.3 token
-        return (int) (chineseCount * 1.5 + englishWords * 1.3);
-    }
-
-    /**
-     * 流式调用降级方法
-     */
-    private Flux<String> streamChatFallback(String prompt, LLMOptions options, Throwable throwable) {
-        log.warn("LLM service degraded: {}", throwable.getMessage());
-        return Flux.just("抱歉，AI服务暂时不可用，请稍后再试。");
-    }
-
-    /**
-     * 非流式调用降级方法
-     */
-    private String chatFallback(String prompt, LLMOptions options, Throwable throwable) {
-        log.warn("LLM service degraded: {}", throwable.getMessage());
-        return "抱歉，AI服务暂时不可用，请稍后再试。";
+                @Override
+                public void onComplete(Response<AiMessage> response) {
+                    sink.complete();
+                }
+                @Override
+                public void onError(Throwable error) {
+                    sink.error(new LLMApiException("Qwen API call failed", error));
+                }
+            });
+        }, FluxSink.OverflowStrategy.BUFFER);
     }
 }
 ```
-
-**核心技术点**:
-
-1. **流式响应实现**
-   - 使用 `Flux.create` 创建响应式流
-   - `StreamingResponseHandler` 处理流式回调
-   - `sink.next()` 实时推送每个token
-   - `sink.complete()` 标记流结束
-
-2. **熔断降级**
-   - `@CircuitBreaker` 注解实现熔断
-   - `fallbackMethod` 指定降级方法
-   - 服务不可用时返回友好提示
-
-3. **重试机制**
-   - `@Retryable` 注解实现自动重试
-   - `maxAttempts = 3` 最多重试3次
-   - `@Backoff` 配置退避策略
-
-4. **Token计数**
-   - 使用 `OpenAiTokenizer` 精确计数
-   - 降级方案：简单估算算法
-   - 中英文分别计算
 
 ---
 
@@ -438,237 +290,93 @@ public class OpenAILLMService implements LLMService {
 ```java
 com.abin.mallchat.ai.vector/
 ├── config/
-│   └── MilvusConfig.java            # Milvus配置
+│   └── MilvusConnectionPool.java    # Milvus连接池
 ├── service/
 │   ├── VectorService.java           # 向量服务接口
 │   ├── EmbeddingService.java        # 向量化服务接口
 │   └── impl/
+│       ├── QdrantVectorService.java # Qdrant实现（默认）
 │       ├── MilvusVectorService.java # Milvus实现
-│       └── OpenAIEmbeddingService.java # OpenAI Embedding
+│       ├── MockVectorService.java   # Mock实现
+│       ├── OllamaBgeEmbeddingService.java # BGE实现
+│       ├── M3eEmbeddingService.java # M3E实现
+│       ├── OpenAIEmbeddingService.java # OpenAI兼容
+│       └── MockEmbeddingService.java # Mock实现
 └── domain/
-    ├── SearchResult.java            # 检索结果
-    └── VectorData.java              # 向量数据
+    └── SearchResult.java            # 检索结果
 ```
 
-#### 4.2.3 MilvusVectorService 实现
+#### 4.2.3 VectorService 接口
 
 ```java
-@Service
-public class MilvusVectorService implements VectorService {
-
-    @Autowired
-    private MilvusServiceClient milvusClient;
-
-    @Autowired
-    private EmbeddingService embeddingService;
-
-    private static final String COLLECTION_NAME = "document_chunks";
-    private static final int VECTOR_DIM = 1536;  // OpenAI embedding维度
-
-    /**
-     * 初始化集合
-     */
-    @PostConstruct
-    public void initCollection() {
-        if (!collectionExists()) {
-            createCollection();
-            createIndex();
-        }
-    }
-
-    /**
-     * 创建集合
-     */
-    private void createCollection() {
-        FieldType chunkIdField = FieldType.newBuilder()
-                .withName("chunk_id")
-                .withDataType(DataType.Int64)
-                .withPrimaryKey(true)
-                .withAutoID(false)
-                .build();
-
-        FieldType vectorField = FieldType.newBuilder()
-                .withName("embedding")
-                .withDataType(DataType.FloatVector)
-                .withDimension(VECTOR_DIM)
-                .build();
-
-        FieldType contentField = FieldType.newBuilder()
-                .withName("content")
-                .withDataType(DataType.VarChar)
-                .withMaxLength(65535)
-                .build();
-
-        CreateCollectionParam createParam = CreateCollectionParam.newBuilder()
-                .withCollectionName(COLLECTION_NAME)
-                .withDescription("Document chunks collection")
-                .withFieldTypes(Arrays.asList(chunkIdField, vectorField, contentField))
-                .build();
-
-        milvusClient.createCollection(createParam);
-    }
-
-    /**
-     * 创建索引
-     */
-    private void createIndex() {
-        CreateIndexParam indexParam = CreateIndexParam.newBuilder()
-                .withCollectionName(COLLECTION_NAME)
-                .withFieldName("embedding")
-                .withIndexType(IndexType.IVF_FLAT)
-                .withMetricType(MetricType.L2)
-                .withExtraParam("{\"nlist\":1024}")
-                .build();
-
-        milvusClient.createIndex(indexParam);
-    }
-
-    /**
-     * 插入向量
-     */
-    @Override
-    public void insert(Long chunkId, String content) {
-        // 1. 文本向量化
-        List<Float> embedding = embeddingService.embed(content);
-
-        // 2. 构建插入数据
-        List<InsertParam.Field> fields = new ArrayList<>();
-        fields.add(new InsertParam.Field("chunk_id", Collections.singletonList(chunkId)));
-        fields.add(new InsertParam.Field("embedding", Collections.singletonList(embedding)));
-        fields.add(new InsertParam.Field("content", Collections.singletonList(content)));
-
-        // 3. 执行插入
-        InsertParam insertParam = InsertParam.newBuilder()
-                .withCollectionName(COLLECTION_NAME)
-                .withFields(fields)
-                .build();
-
-        milvusClient.insert(insertParam);
-    }
-
-    /**
-     * 向量检索
-     */
-    @Override
-    public List<SearchResult> search(String query, int topK) {
-        // 1. 查询文本向量化
-        List<Float> queryEmbedding = embeddingService.embed(query);
-
-        // 2. 构建检索参数
-        SearchParam searchParam = SearchParam.newBuilder()
-                .withCollectionName(COLLECTION_NAME)
-                .withMetricType(MetricType.L2)
-                .withTopK(topK)
-                .withVectors(Collections.singletonList(queryEmbedding))
-                .withVectorFieldName("embedding")
-                .withParams("{\"nprobe\":10}")
-                .build();
-
-        // 3. 执行检索
-        SearchResults results = milvusClient.search(searchParam);
-
-        // 4. 解析结果
-        return parseSearchResults(results);
-    }
-
-    /**
-     * 删除向量
-     */
-    @Override
-    public void delete(Long chunkId) {
-        String expr = "chunk_id == " + chunkId;
-
-        DeleteParam deleteParam = DeleteParam.newBuilder()
-                .withCollectionName(COLLECTION_NAME)
-                .withExpr(expr)
-                .build();
-
-        milvusClient.delete(deleteParam);
-    }
+public interface VectorService {
+    void storeVectors(Long documentId, List<DocumentChunk> chunks);
+    List<SearchResult> search(float[] queryVector, int topK, Long documentId);
+    void deleteVectors(Long documentId);
+    boolean exists(Long documentId);
 }
 ```
 
-**核心技术点**:
-
-1. **集合设计**
-   - `chunk_id`: 主键，关联文档块
-   - `embedding`: 1536维向量（OpenAI）
-   - `content`: 原始文本内容
-
-2. **索引选择**
-   - `IVF_FLAT`: 倒排文件索引
-   - `L2`: 欧氏距离度量
-   - `nlist=1024`: 聚类中心数量
-
-3. **检索流程**
-   - 查询文本 → 向量化
-   - 向量检索 → Top-K结果
-   - 结果解析 → 返回相关文档
-
-#### 4.2.4 OpenAIEmbeddingService 实现
+#### 4.2.4 QdrantVectorService 动态向量创建
 
 ```java
-@Service
-public class OpenAIEmbeddingService implements EmbeddingService {
+private void createCollectionIfNotExists() throws ExecutionException, InterruptedException {
+    boolean exists = qdrantClient.collectionExistsAsync(collectionName).get();
+    if (exists) return;
 
-    @Autowired
+    Collections.CollectionOperationResponse response = qdrantClient.createCollectionAsync(
+            collectionName,
+            Collections.VectorParams.newBuilder()
+                    .setDistance(Collections.Distance.Cosine)
+                    .setOnDisk(true)      // 向量落盘，降低内存
+                    .setDynamic(true)     // 动态向量，支持 1024/768 维
+                    .build()
+    ).get();
+}
+```
+
+#### 4.2.5 OllamaBgeEmbeddingService 核心实现
+
+```java
+@Slf4j
+@Service
+@Profile("!mock")
+@ConditionalOnProperty(name = "embedding.provider", havingValue = "bge", matchIfMissing = true)
+public class OllamaBgeEmbeddingService implements EmbeddingService {
+
+    @Value("${ollama.base-url:http://localhost:11434}")
+    private String baseUrl;
+
+    @Value("${ollama.embedding-model:bge-large-zh-v1.5}")
+    private String modelName;
+
     private EmbeddingModel embeddingModel;
 
-    /**
-     * 文本向量化
-     */
-    @Override
-    @CircuitBreaker(name = "embeddingService", fallbackMethod = "embedFallback")
-    @Retryable(value = {Exception.class}, maxAttempts = 3)
-    public List<Float> embed(String text) {
-        if (text == null || text.isEmpty()) {
-            throw new IllegalArgumentException("Text cannot be empty");
-        }
-
-        try {
-            // 调用 LangChain4j Embedding API
-            Response<Embedding> response = embeddingModel.embed(text);
-            Embedding embedding = response.content();
-
-            // 转换为 Float 列表
-            return embedding.vectorAsList();
-
-        } catch (Exception e) {
-            log.error("Failed to embed text", e);
-            throw new EmbeddingException("Failed to embed text", e);
-        }
+    @PostConstruct
+    public void init() {
+        this.embeddingModel = OllamaEmbeddingModel.builder()
+                .baseUrl(baseUrl)
+                .modelName(modelName)
+                .timeout(timeout)
+                .maxRetries(maxRetries)
+                .build();
     }
 
-    /**
-     * 批量向量化
-     */
     @Override
-    public List<List<Float>> embedBatch(List<String> texts) {
-        if (texts == null || texts.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        try {
-            Response<List<Embedding>> response = embeddingModel.embedAll(texts);
-            List<Embedding> embeddings = response.content();
-
-            return embeddings.stream()
-                    .map(Embedding::vectorAsList)
-                    .collect(Collectors.toList());
-
-        } catch (Exception e) {
-            log.error("Failed to embed batch", e);
-            throw new EmbeddingException("Failed to embed batch", e);
-        }
+    public float[] generateEmbedding(String text) {
+        Response<Embedding> response = embeddingModel.embed(text);
+        return response.content().vector();  // 1024 维
     }
 
-    /**
-     * 降级方法
-     */
-    private List<Float> embedFallback(String text, Throwable throwable) {
-        log.warn("Embedding service degraded: {}", throwable.getMessage());
-        // 返回零向量
-        return Collections.nCopies(1536, 0.0f);
+    @Override
+    public List<float[]> generateEmbeddings(List<String> texts) {
+        List<TextSegment> segments = texts.stream()
+                .map(TextSegment::from)
+                .collect(Collectors.toList());
+        Response<List<Embedding>> response = embeddingModel.embedAll(segments);
+        return response.content().stream()
+                .map(Embedding::vector)
+                .collect(Collectors.toList());
     }
 }
 ```
@@ -684,251 +392,230 @@ public class OpenAIEmbeddingService implements EmbeddingService {
 - 异步索引处理
 - 查询增强与生成
 
-#### 4.3.2 核心类结构
+#### 4.3.2 RAGServiceImpl 核心实现
 
 ```java
-com.abin.mallchat.ai.rag/
-├── controller/
-│   ├── RAGController.java           # RAG接口
-│   └── DocumentController.java      # 文档管理接口
-├── service/
-│   ├── RAGService.java              # RAG服务接口
-│   ├── DocumentProcessingService.java # 文档处理接口
-│   ├── DocumentIndexingProducer.java  # 索引生产者
-│   └── impl/
-│       ├── RAGServiceImpl.java      # RAG实现
-│       └── TikaDocumentProcessingService.java # Tika实现
-├── consumer/
-│   └── DocumentIndexingConsumer.java # 索引消费者
-├── domain/
-│   ├── dto/
-│   │   ├── RAGQueryRequest.java     # 查询请求
-│   │   ├── StreamChunk.java         # 流式数据块
-│   │   └── DocumentMetadata.java    # 文档元数据
-│   └── entity/
-│       └── ChunkMetadata.java       # 分块元数据
-└── config/
-    └── DocumentConfig.java          # 文档配置
-```
-
-#### 4.3.3 RAGServiceImpl 核心实现
-
-```java
+@Slf4j
 @Service
 public class RAGServiceImpl implements RAGService {
 
-    @Autowired
-    private VectorService vectorService;
+    @Autowired private KnowledgeDocumentDao knowledgeDocumentDao;
+    @Autowired private DocumentChunkDao documentChunkDao;
+    @Autowired private AIConversationDao aiConversationDao;
+    @Autowired private VectorService vectorService;
+    @Autowired private EmbeddingService embeddingService;
+    @Autowired private LLMService llmService;
+    @Autowired private DocumentConfig documentConfig;
+    @Autowired private DocumentIndexingProducer documentIndexingProducer;
+    @Autowired private DegradationService degradationService;
+    @Autowired private DocumentMetadataCache documentMetadataCache;
+    @Autowired private IndexStatusCache indexStatusCache;
+    @Autowired private QueryResultCache queryResultCache;
 
-    @Autowired
-    private LLMService llmService;
-
-    @Autowired
-    private DocumentChunkDao documentChunkDao;
-
-    /**
-     * RAG查询 - 流式响应
-     */
     @Override
-    public Flux<StreamChunk> queryStream(RAGQueryRequest request) {
-        return Flux.create(sink -> {
-            try {
-                // 1. 向量检索相关文档
-                List<SearchResult> searchResults = vectorService.search(
-                    request.getQuery(),
-                    request.getTopK()
-                );
+    public Flux<String> ragQuery(RAGQueryRequest request) {
+        long startTime = System.currentTimeMillis();
 
-                // 2. 构建增强提示词
-                String enhancedPrompt = buildEnhancedPrompt(
-                    request.getQuery(),
-                    searchResults
-                );
-
-                // 3. 发送检索到的文档块
-                for (SearchResult result : searchResults) {
-                    sink.next(StreamChunk.builder()
-                            .type("context")
-                            .content(result.getContent())
-                            .score(result.getScore())
-                            .build());
-                }
-
-                // 4. 流式调用LLM
-                llmService.streamChat(enhancedPrompt, request.getLlmOptions())
-                        .subscribe(
-                            token -> sink.next(StreamChunk.builder()
-                                    .type("answer")
-                                    .content(token)
-                                    .build()),
-                            error -> sink.error(error),
-                            () -> sink.complete()
-                        );
-
-            } catch (Exception e) {
-                log.error("RAG query failed", e);
-                sink.error(new RAGException("RAG query failed", e));
+        // 1. 检查索引状态
+        if (request.getDocumentId() != null) {
+            String indexStatus = indexStatusCache.getIndexStatus(request.getDocumentId());
+            if (!IndexStatus.COMPLETED.name().equals(indexStatus)) {
+                return Flux.just(getIndexStatusMessage(indexStatus));
             }
-        });
-    }
-
-    /**
-     * 构建增强提示词
-     */
-    private String buildEnhancedPrompt(String query, List<SearchResult> contexts) {
-        StringBuilder prompt = new StringBuilder();
-
-        prompt.append("请基于以下参考信息回答问题：\n\n");
-
-        // 添加检索到的上下文
-        for (int i = 0; i < contexts.size(); i++) {
-            prompt.append("参考资料 ").append(i + 1).append(":\n");
-            prompt.append(contexts.get(i).getContent()).append("\n\n");
         }
 
-        prompt.append("问题: ").append(query).append("\n\n");
-        prompt.append("请根据上述参考资料回答问题。如果参考资料中没有相关信息，请明确说明。");
+        try {
+            // 2. 尝试缓存
+            List<SearchResult> searchResults = queryResultCache.getQueryResult(
+                    request.getQuestion(), request.getDocumentId(), request.getTopK());
 
-        return prompt.toString();
-    }
+            if (searchResults == null) {
+                // 3. 生成问题向量
+                float[] queryVector = embeddingService.generateEmbedding(request.getQuestion());
+                // 4. 向量检索
+                searchResults = vectorService.search(queryVector, request.getTopK(), request.getDocumentId());
+                // 5. 缓存结果
+                if (!searchResults.isEmpty()) {
+                    queryResultCache.cacheQueryResult(
+                            request.getQuestion(), request.getDocumentId(), request.getTopK(), searchResults);
+                }
+            }
 
-    /**
-     * RAG查询 - 非流式
-     */
-    @Override
-    public String query(RAGQueryRequest request) {
-        // 1. 向量检索
-        List<SearchResult> searchResults = vectorService.search(
-            request.getQuery(),
-            request.getTopK()
-        );
+            // 6. 空结果降级
+            if (searchResults.isEmpty()) {
+                return fallbackToNormalQA(request, startTime);
+            }
 
-        // 2. 构建增强提示词
-        String enhancedPrompt = buildEnhancedPrompt(
-            request.getQuery(),
-            searchResults
-        );
+            // 7. 构造 Prompt 并调用 LLM
+            String ragPrompt = buildRAGPrompt(request.getQuestion(), searchResults);
+            LLMOptions options = LLMOptions.builder().temperature(0.7).maxTokens(2000).build();
+            Flux<String> responseFlux = llmService.streamChat(ragPrompt, options);
 
-        // 3. 调用LLM
-        return llmService.chat(enhancedPrompt, request.getLlmOptions());
+            // 8. 保存对话历史
+            StringBuilder fullResponse = new StringBuilder();
+            return responseFlux
+                    .doOnNext(fullResponse::append)
+                    .doOnComplete(() -> {
+                        long responseTime = System.currentTimeMillis() - startTime;
+                        saveConversation(request, fullResponse.toString(), searchResults, responseTime);
+                    });
+
+        } catch (Exception e) {
+            log.error("RAG查询异常，尝试降级处理", e);
+            if (degradationService.shouldDegrade()) {
+                return degradationService.degradedRAGQuery(request.getQuestion());
+            }
+            return Flux.just("抱歉，处理您的问题时发生错误，请稍后重试。");
+        }
     }
 }
 ```
 
-**RAG流程详解**:
+#### 4.3.3 RAG Prompt 构建
+
+```java
+private String buildRAGPrompt(String question, List<SearchResult> searchResults) {
+    StringBuilder prompt = new StringBuilder();
+    prompt.append("你是一个专业的知识问答助手。请根据以下提供的知识库内容回答用户的问题。\n\n");
+    prompt.append("回答要求：\n");
+    prompt.append("1. 仅基于提供的知识库内容回答，不要编造信息\n");
+    prompt.append("2. 如果知识库中没有相关信息，请明确告知用户\n");
+    prompt.append("3. 回答要准确、简洁、易懂\n\n");
+    prompt.append("知识库内容：\n---\n");
+
+    List<SearchResult> uniqueResults = deduplicateSearchResults(searchResults);
+    for (int i = 0; i < uniqueResults.size(); i++) {
+        SearchResult result = uniqueResults.get(i);
+        prompt.append(String.format("[片段 %d] (相似度: %.2f)\n", i + 1, result.getScore()));
+        prompt.append(result.getContent()).append("\n\n");
+    }
+    prompt.append("---\n\n");
+    prompt.append("用户问题：\n").append(question).append("\n\n请回答：");
+    return prompt.toString();
+}
+```
+
+#### 4.3.4 StreamController SSE 包装
+
+```java
+@PostMapping(value = "/rag/query", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+public Flux<ServerSentEvent<String>> streamRAGQuery(@RequestBody RAGQueryRequest request) {
+    String connectionId = generateConnectionId(request.getUserId());
+    AtomicInteger chunkIndex = new AtomicInteger(0);
+
+    Flux<String> contentFlux = ragService.ragQuery(request);
+
+    Flux<ServerSentEvent<String>> contentEvents = contentFlux
+            .map(content -> ServerSentEvent.<String>builder()
+                    .event("message")
+                    .data(toJson(StreamChunk.content(chunkIndex.getAndIncrement(), content)))
+                    .build())
+            .concatWith(Mono.fromCallable(() -> ServerSentEvent.<String>builder()
+                    .event("done")
+                    .data(toJson(StreamChunk.end(chunkIndex.get())))
+                    .build()))
+            .onErrorResume(error -> Mono.just(ServerSentEvent.<String>builder()
+                    .event("error")
+                    .data(toJson(StreamChunk.error(chunkIndex.get(), error.getMessage())))
+                    .build()));
+
+    // 心跳 + 超时检测
+    Flux<ServerSentEvent<String>> heartbeatFlux = Flux.interval(Duration.ofSeconds(30))
+            .map(tick -> ServerSentEvent.<String>builder()
+                    .event("heartbeat")
+                    .data(toJson(StreamChunk.heartbeat()))
+                    .build());
+
+    return Flux.merge(contentEvents, heartbeatFlux)
+            .takeUntilOther(contentEvents.filter(e -> "done".equals(e.event()) || "error".equals(e.event())).next());
+}
+```
+
+---
+
+## 5. RAG 查询流程详解
 
 ```
 用户查询
     ↓
-1. 向量检索 (Vector Search)
-    ├─ 查询文本向量化
-    ├─ Milvus相似度检索
-    └─ 返回Top-K相关文档
+1. 参数校验 + 索引状态检查
     ↓
-2. 提示词增强 (Prompt Enhancement)
-    ├─ 组装检索到的上下文
-    ├─ 构建结构化提示词
-    └─ 添加查询问题
+2. 查询结果缓存（JetCache）
     ↓
-3. LLM生成 (Generation)
-    ├─ 流式调用LLM
-    ├─ 实时推送token
-    └─ 返回最终答案
+[缓存命中] → 直接返回缓存的检索结果
     ↓
-流式响应给前端
+[缓存未命中]
+    ↓
+3. Embedding 向量化（Ollama bge / m3e）
+    ↓
+4. Qdrant 相似度检索（动态向量）
+    ↓
+5. 缓存检索结果
+    ↓
+6. 空结果判断
+    ├── 空 → 降级到普通 QA（直接问 LLM）
+    └── 非空 → 继续
+    ↓
+7. 构建 RAG Prompt
+    ↓
+8. LLM 流式生成（Qwen / Llama / OpenAI）
+    ↓
+9. SSE 逐字推送给前端
+    ↓
+10. 保存对话历史到 MySQL
 ```
 
-#### 4.3.4 文档处理与分块
+---
 
-```java
-@Service
-public class TikaDocumentProcessingService implements DocumentProcessingService {
+## 6. 面试准备
 
-    @Autowired
-    private ChunkStrategy chunkStrategy;
+### 6.1 高频问题
 
-    private static final int MAX_CHUNK_SIZE = 500;
-    private static final int CHUNK_OVERLAP = 50;
+#### Q1: 你们项目AI模块怎么设计的？
 
-    /**
-     * 处理文档
-     */
-    @Override
-    public List<DocumentChunk> processDocument(MultipartFile file, Long documentId) {
-        try {
-            // 1. 提取文本
-            String content = extractText(file);
+**答**: 项目AI模块采用分层架构，自上而下分为接口层（Controller）、服务层（Service）、基础设施层（Vector/LLM/Embedding）。核心能力包括RAG知识问答、AI智能助手、文档处理和流式输出。技术选型上以本地开源方案为主：Ollama运行Qwen2.5-14B和bge-large-zh-v1.5，Qdrant作为向量库，LangChain4j 0.36.0做模型抽象，RocketMQ做异步索引，JetCache做多级缓存。
 
-            // 2. 文本分块
-            List<String> chunks = chunkStrategy.chunk(content, MAX_CHUNK_SIZE, CHUNK_OVERLAP);
+#### Q2: RAG是怎么实现的？
 
-            // 3. 创建文档块实体
-            List<DocumentChunk> documentChunks = new ArrayList<>();
-            for (int i = 0; i < chunks.size(); i++) {
-                DocumentChunk chunk = new DocumentChunk();
-                chunk.setDocumentId(documentId);
-                chunk.setChunkIndex(i);
-                chunk.setContent(chunks.get(i));
-                chunk.setTokenCount(llmService.countTokens(chunks.get(i)));
-                documentChunks.add(chunk);
-            }
+**答**: RAG流程分为五步：
+1. 用户提问后先做参数校验和索引状态检查；
+2. 查询缓存，未命中则生成问题向量；
+3. 在Qdrant中做相似度检索Top-K；
+4. 将检索结果构建成Prompt；
+5. 调用LLM流式生成，通过SSE返回。
+如果检索为空，会降级到普通QA模式。
 
-            return documentChunks;
+#### Q3: 为什么选Qdrant不选Milvus？
 
-        } catch (Exception e) {
-            log.error("Failed to process document", e);
-            throw new DocumentProcessingException("Failed to process document", e);
-        }
-    }
+**答**: 三个核心原因：
+1. **部署简单**：Qdrant单容器即可运行，Milvus需要etcd、minio等多组件；
+2. **动态向量**：我们支持bge（1024维）和m3e（768维）切换，Qdrant原生支持动态向量，Milvus需要固定维度；
+3. **运维成本低**：更适合中小型项目和快速迭代。
 
-    /**
-     * 使用 Apache Tika 提取文本
-     */
-    private String extractText(MultipartFile file) throws Exception {
-        Tika tika = new Tika();
-        try (InputStream inputStream = file.getInputStream()) {
-            return tika.parseToString(inputStream);
-        }
-    }
-}
-```
+#### Q4: Embedding怎么做的？
 
-**文档分块策略**:
+**答**: 通过Ollama本地部署bge-large-zh-v1.5，使用LangChain4j的OllamaEmbeddingModel封装。支持单条和批量生成，输出1024维向量。备选方案是m3e-base（768维），通过配置`embedding.provider`切换。Mock模式下使用MD5生成确定性伪随机向量。
 
-```java
-@Component
-public class FixedSizeChunkStrategy implements ChunkStrategy {
+#### Q5: 项目有什么可以优化的地方？
 
-    @Override
-    public List<String> chunk(String text, int maxSize, int overlap) {
-        List<String> chunks = new ArrayList<>();
+**答**: 按照路线图，下一步优化方向包括：
+- RAG增强：混合检索（向量+BM25）、重排序、查询改写
+- AI Agent：工具调用、ReAct循环、长期记忆
+- 工程优化：调用链追踪、Token消耗看板、模型响应质量评估
 
-        int start = 0;
-        while (start < text.length()) {
-            int end = Math.min(start + maxSize, text.length());
+### 6.2 核心技术点
 
-            // 尝试在句子边界分割
-            if (end < text.length()) {
-                int lastPeriod = text.lastIndexOf('。', end);
-                int lastNewline = text.lastIndexOf('\n', end);
-                int boundary = Math.max(lastPeriod, lastNewline);
+| 技术点 | 关键实现 |
+|--------|---------|
+| 流式输出 | Reactor Flux + SSE |
+| 动态向量 | Qdrant `setDynamic(true)` |
+| 多轮对话 | `sessionId` + 历史消息加载 |
+| 服务降级 | Resilience4j CircuitBreaker |
+| 异步索引 | RocketMQ + Consumer |
+| 缓存策略 | JetCache L1 Caffeine + L2 Redis |
+| Mock模式 | `@Profile("mock")` + 接口多实现 |
 
-                if (boundary > start) {
-                    end = boundary + 1;
-                }
-            }
+---
 
-            chunks.add(text.substring(start, end));
-            start = end - overlap;  // 重叠部分
-        }
-
-        return chunks;
-    }
-}
-```
-
-**分块策略说明**:
-
-- **固定大小**: 每块最多500字符
-- **重叠处理**: 相邻块重叠50字符，保持上下文连贯
-- **边界优化**: 尽量在句子边界分割，避免截断
+*本文档为速查版，完整内容请参见 [mallchat-ai/docs/AI技术方案.md](../mallchat-ai/docs/AI技术方案.md)。*
+*最后更新：2026-06-13。*

@@ -2,7 +2,8 @@
 
 > **用途**: 面试时展示技术深度、问题分析能力、解决方案设计能力  
 > **场景**: 项目经验介绍、技术难点讨论、架构设计题  
-> **建议**: 每个 case 用自己的话讲，结合实际项目背景
+> **建议**: 每个 case 用自己的话讲，结合实际项目背景  
+> **版本**: v1.1 | 更新日期: 2026-06-13 | 技术栈: Ollama + Qdrant + bge + Qwen2.5
 
 ---
 
@@ -22,7 +23,7 @@
 ### Case 1: Embedding 模型维度不一致导致向量库 schema 冲突
 
 **问题背景**:
-项目初期使用 bge-large-zh-v1.5（1024维），后来想切换到 m3e-base（768维）做对比测试。但向量数据库（当时是 Milvus）的 Collection 在创建时就固定了维度，切换模型后所有向量维度不匹配，插入直接报错。
+项目初期使用 bge-large-zh-v1.5（1024维），后来想切换到 m3e-base（768维）做对比测试。传统向量数据库（如 Milvus）的 Collection 在创建时就固定了维度，切换模型后所有向量维度不匹配，插入直接报错。
 
 **技术细节**:
 ```
@@ -36,8 +37,20 @@ m3e-base: 768 dim
 2. **V2（多 Collection）**: 每个模型一个 Collection，通过配置切换 → 管理复杂
 3. **V3（最终）**: 迁移到 Qdrant，开启 `dynamic=true` 动态向量 → 同一 Collection 支持任意维度
 
+**实际代码**:
+```java
+Collections.CollectionOperationResponse response = qdrantClient.createCollectionAsync(
+        collectionName,
+        Collections.VectorParams.newBuilder()
+                .setDistance(Collections.Distance.Cosine)
+                .setOnDisk(true)      // 向量落盘，降低内存
+                .setDynamic(true)     // 动态向量，支持 1024/768 维
+                .build()
+).get();
+```
+
 **面试可讲**:
-> "我们在做 Embedding 模型选型时遇到一个典型问题：不同模型的输出维度不一致（1024 vs 768），而传统向量数据库要求 schema 固定。最初我们用的 Milvus，切换模型必须重建 Collection，生产环境不可接受。最终我们调研了 Qdrant 的动态向量特性（dynamic vector），解决了这个痛点。这个 case 让我深刻理解了**选型时要考虑维度兼容性**这个容易被忽略的点。"
+> "我们在做 Embedding 模型选型时遇到一个典型问题：不同模型的输出维度不一致（1024 vs 768），而传统向量数据库要求 schema 固定。最初我们用的 Milvus，切换模型必须重建 Collection，生产环境不可接受。最终我们调研了 Qdrant 的动态向量特性（`dynamic=true`），同一 Collection 可以存储不同维度向量，解决了这个痛点。这个 case 让我深刻理解了**选型时要考虑维度兼容性**这个容易被忽略的点。"
 
 **延伸问题准备**:
 - Q: 动态向量有什么性能损耗？ A: 约 5-10% 的查询延迟增加，但可以接受
@@ -53,25 +66,25 @@ m3e-base: 768 dim
 **迁移难点**:
 | 组件 | 旧方案 | 新方案 | 迁移难点 |
 |------|--------|--------|---------|
-| Embedding | OpenAI API | Ollama + bge | Java 代码层接口不变，底层从 HTTP 改为本地 gRPC |
-| 向量库 | Milvus | Qdrant | 数据迁移、API 差异、连接方式变化 |
+| Embedding | OpenAI API | Ollama + bge | 接口不变，底层从 HTTP 改为本地 Ollama |
+| 向量库 | Milvus | Qdrant | 数据迁移、API 差异、动态向量 |
 | LLM | OpenAI GPT-4 | Ollama + Qwen2.5 | 流式响应格式差异、Token 计算方式不同 |
 | 微调 | 无 | LLaMA-Factory | 新增 Python 微服务，跨语言通信 |
 
 **踩坑记录**:
-1. **Ollama 的 OpenAI 兼容接口有坑**: `/v1/chat/completions` 支持，但 `/v1/embeddings` 的 `dimensions` 参数行为与 OpenAI 不一致
-2. **LangChain4j 版本兼容性**: 0.27.1 不支持 Ollama，必须升级到 0.36.0，升级后部分内部 API 包名变化
-3. **显存估算失误**: 原以为 Qwen2.5-14B FP16 需要 28GB，实际推理时加上 KV Cache 峰值达到 32GB，导致 OOM
+1. **LangChain4j 版本兼容性**: 0.27.1 不支持 Ollama，必须升级到 0.36.0
+2. **显存估算失误**: 原以为 Qwen2.5-14B FP16 需要 28GB，实际推理时加上 KV Cache 峰值达到 32GB，导致 OOM
+3. **Qdrant gRPC 端口**: 默认 REST 端口 6333，Java SDK 使用 gRPC 端口 6334，容易配错
 
 **面试可讲**:
-> "我们经历了一次完整的技术栈迁移，从全部依赖第三方 API 切换到全本地开源方案。最大的挑战不是单个组件替换，而是**四个组件同时迁移的兼容性矩阵**。比如 LangChain4j 0.27 不支持 Ollama，必须升级，但升级后又影响了 Milvus SDK 的版本兼容性。我们采用'**逐步替换 + Mock 兜底**'策略：先升级 LangChain4j，用 Mock 服务跑通链路，再逐个替换真实组件。"
+> "我们经历了一次完整的技术栈迁移，从全部依赖第三方 API 切换到全本地开源方案。最大的挑战不是单个组件替换，而是**四个组件同时迁移的兼容性矩阵**。比如 LangChain4j 0.27 不支持 Ollama，必须升级到 0.36.0。我们采用'**逐步替换 + Mock 兜底**'策略：先升级 LangChain4j，用 Mock 服务跑通链路，再逐个替换真实组件。"
 
 ---
 
-### Case 3: 多模型切换的工厂设计踩坑
+### Case 3: 多模型切换的工厂设计
 
 **问题背景**:
-需要支持多个 LLM 提供商（OpenAI、ChatGLM、Qwen、Llama），通过配置切换。最初每个服务独立注入，后来发现切换模型需要改代码重新部署。
+需要支持多个 LLM 提供商（OpenAI、ChatGLM、Qwen、Llama、Mock），通过配置切换。最初每个服务独立注入，后来发现切换模型需要改代码重新部署。
 
 **问题演进**:
 ```java
@@ -82,12 +95,53 @@ m3e-base: 768 dim
 @ConditionalOnProperty(name = "llm.provider", havingValue = "openai")
 
 // V3: 工厂模式（最终方案）
-LLMServiceFactory.getService(LLMProvider.QWEN);
-LLMServiceFactory.getService("qwen-ollama"); // 支持运行时切换
+LLMServiceFactory.getService(LLMProvider.QWEN_OLLAMA);
+LLMServiceFactory.getService("qwen"); // 支持运行时切换
+```
+
+**实际代码**:
+```java
+@Slf4j
+@Component
+public class LLMServiceFactory {
+    
+    @Value("${langchain4j.llm.provider:openai}")
+    private String defaultProvider;
+    
+    @Autowired
+    private ApplicationContext applicationContext;
+    
+    private Map<LLMProvider, LLMService> serviceMap = new HashMap<>();
+    private LLMService defaultService;
+    private LLMService fallbackService;
+    
+    @PostConstruct
+    public void init() {
+        Map<String, LLMService> beans = applicationContext.getBeansOfType(LLMService.class);
+        for (Map.Entry<String, LLMService> entry : beans.entrySet()) {
+            String beanName = entry.getKey().toLowerCase();
+            LLMService service = entry.getValue();
+            if (beanName.contains("qwenllm")) {
+                serviceMap.put(LLMProvider.QWEN_OLLAMA, service);
+            } else if (beanName.contains("llamallm")) {
+                serviceMap.put(LLMProvider.LLAMA, service);
+            } else if (beanName.contains("openai")) {
+                serviceMap.put(LLMProvider.OPENAI, service);
+            } else if (beanName.contains("mock")) {
+                serviceMap.put(LLMProvider.MOCK, service);
+            }
+        }
+        defaultService = serviceMap.get(LLMProvider.fromCode(defaultProvider));
+    }
+    
+    public LLMService getDefaultService() { return defaultService; }
+    public LLMService getService(LLMProvider provider) { return serviceMap.get(provider); }
+    public LLMService getFallbackService() { return fallbackService; }
+}
 ```
 
 **面试可讲**:
-> "关于 LLM 多提供商切换，我们最初用 Spring 的 `@ConditionalOnProperty`，发现只能二选一，不能运行时切换。后来设计了 `LLMServiceFactory`，在 `@PostConstruct` 时扫描所有 `LLMService` 实现，建立 provider -> service 的映射。这样业务代码只依赖工厂接口，新增提供商只需实现接口 + 注册到工厂，符合**开闭原则**。"
+> "关于 LLM 多提供商切换，我们最初用 Spring 的 `@ConditionalOnProperty`，发现只能二选一，不能运行时切换。后来设计了 `LLMServiceFactory`，在 `@PostConstruct` 时扫描所有 `LLMService` 实现，建立 provider -> service 的映射。业务代码只依赖工厂接口，新增提供商只需实现接口 + 注册到工厂，符合**开闭原则**。"
 
 ---
 
@@ -102,6 +156,22 @@ LLMServiceFactory.getService("qwen-ollama"); // 支持运行时切换
 1. **V1（串行）**: 循环调用 `generateEmbedding()` → 100s
 2. **V2（并行）**: 用 `CompletableFuture.allOf()` 并行调用 → 降到 10s（但打满线程池）
 3. **V3（批量 API）**: LangChain4j 的 `embedAll(List<TextSegment>)` → 降到 3s（一次请求生成所有向量）
+
+**实际代码**:
+```java
+@Override
+public List<float[]> generateEmbeddings(List<String> texts) {
+    List<TextSegment> segments = texts.stream()
+            .map(TextSegment::from)
+            .collect(Collectors.toList());
+    
+    Response<List<Embedding>> response = embeddingModel.embedAll(segments);
+    
+    return response.content().stream()
+            .map(Embedding::vector)
+            .collect(Collectors.toList());
+}
+```
 
 **面试可讲**:
 > "我们在文档索引时遇到经典的 N+1 问题：200 个 chunk 串行生成 Embedding 耗时 100 秒。最初想并行化，但发现会打满线程池且对 API 服务端不友好。最终解法是利用 LangChain4j 的批量 API `embedAll()`，一次请求传入所有文本，服务端内部并行处理，既减少了网络往返，又避免了客户端线程池压力。**性能从 100s 降到 3s**，提升了 30 倍。"
@@ -122,22 +192,22 @@ rag:
   retrieval:
     top-k: 10           # 先扩大候选池
     similarity-threshold: 0.7  # 过滤低质量结果
-    enable-rerank: true        # 重排序
+    enable-rerank: false        # 后续引入重排序
 ```
 
 **面试可讲**:
-> "RAG 检索有个经典难题：Top-K 设多少？我们最初设 5，用户反馈漏召回。分析发现不同查询的最佳 K 值差异很大。最终方案是'**两阶段检索**：先扩大 Top-K=10 做粗排，再用相似度阈值 0.7 过滤，最后引入重排序模型精排。这样既保证了召回率，又控制了上下文质量。这个 case 让我理解了**检索系统里 recall 和 precision 的永恒权衡**。
+> "RAG 检索有个经典难题：Top-K 设多少？我们最初设 5，用户反馈漏召回。分析发现不同查询的最佳 K 值差异很大。最终方案是'**两阶段检索**：先扩大 Top-K=10 做粗排，再用相似度阈值 0.7 过滤。后续计划引入重排序模型精排。这样既保证了召回率，又控制了上下文质量。这个 case 让我理解了**检索系统里 recall 和 precision 的永恒权衡**。"
 
 ---
 
 ### Case 6: 流式响应的背压问题
 
 **问题背景**:
-LLM 流式输出直接推给前端 WebSocket，高并发时前端接收不过来，消息堆积导致内存溢出。
+LLM 流式输出直接推给前端 SSE，高并发时前端接收不过来，消息堆积导致内存溢出。
 
 **问题分析**:
 ```
-LLM (token/s: 50) → WebSocket Buffer → 前端
+LLM (token/s: 50) → SSE Buffer → 前端
                            ↑
                     无背压控制，无限堆积
 ```
@@ -156,7 +226,7 @@ flux.limitRate(10)  // 每秒最多10个token推给前端
 ```
 
 **面试可讲**:
-> "我们在 LLM 流式输出时遇到背压问题：模型每秒生成 50 个 token，但前端 WebSocket 接收能力有限，消息堆积导致服务端内存溢出。最初用 `OverflowStrategy.BUFFER`，结果问题更严重。最终用 `limitRate(10)` 做**生产者限流**，超出的 token 通过 `onBackpressureDrop` 丢弃并记录日志。这体现了**反应式编程中背压处理**的重要性。"
+> "我们在 LLM 流式输出时遇到背压问题：模型每秒生成 50 个 token，但前端 SSE 接收能力有限，消息堆积导致服务端内存溢出。最初用 `OverflowStrategy.BUFFER`，结果问题更严重。最终用 `limitRate(10)` 做**生产者限流**，超出的 token 通过 `onBackpressureDrop` 丢弃并记录日志。这体现了**反应式编程中背压处理**的重要性。"
 
 ---
 
@@ -170,7 +240,7 @@ LLM 推理时间不稳定，简单问题 2s，复杂问题 30s+，超时后用�
 **防御体系**:
 ```
 ┌─────────────────────────────────────┐
-│  客户端超时 (60s)                    │
+│  客户端超时 (60-120s)               │
 │    ↓                                │
 │  Spring Retry (3次，指数退避)        │
 │    ↓                                │
@@ -180,8 +250,33 @@ LLM 推理时间不稳定，简单问题 2s，复杂问题 30s+，超时后用�
 └─────────────────────────────────────┘
 ```
 
+**实际代码**:
+```java
+@Override
+@CircuitBreaker(name = "llmService", fallbackMethod = "streamChatFallback")
+@Retryable(value = {LLMApiException.class}, maxAttempts = 3,
+           backoff = @Backoff(delay = 1000, multiplier = 2))
+public Flux<String> streamChat(String prompt, LLMOptions options) {
+    return Flux.create(sink -> {
+        streamingChatModel.generate(prompt, new StreamingResponseHandler<AiMessage>() {
+            @Override
+            public void onNext(String token) { sink.next(token); }
+            @Override
+            public void onComplete(Response<AiMessage> response) { sink.complete(); }
+            @Override
+            public void onError(Throwable error) { sink.error(error); }
+        });
+    }, FluxSink.OverflowStrategy.BUFFER);
+}
+
+private Flux<String> streamChatFallback(String prompt, LLMOptions options, Throwable throwable) {
+    log.warn("LLM service degraded: {}", throwable.getMessage());
+    return Flux.just("抱歉，AI服务暂时不可用，请稍后再试。");
+}
+```
+
 **面试可讲**:
-> "LLM 推理时间方差很大，简单问题 2 秒，复杂问题可能 30 秒以上。我们构建了三层防御：**超时控制**（60s Hikari 连接超时）、**重试机制**（Spring Retry，3 次指数退避）、**熔断降级**（Resilience4j，失败率 50% 触发熔断，返回友好提示）。特别要注意**重试的幂等性**：LLM 推理不是幂等的，多次调用可能产生不同结果，我们在重试时会在 prompt 中注明'这是重试请求'，让模型知道上下文。"
+> "LLM 推理时间方差很大，简单问题 2 秒，复杂问题可能 30 秒以上。我们构建了三层防御：**超时控制**（60-120s）、**重试机制**（Spring Retry，3 次指数退避）、**熔断降级**（Resilience4j，失败率触发熔断，返回友好提示）。特别要注意**重试的幂等性**：LLM 推理不是幂等的，多次调用可能产生不同结果，我们在重试时会在 prompt 中注明上下文。"
 
 ---
 
@@ -203,13 +298,16 @@ public void deleteVectors(Long documentId) {
 
 **修复方案**:
 ```java
-// 幂等实现：不存在时也返回成功
+@Override
 public void deleteVectors(Long documentId) {
+    log.info("Deleting vectors for document: {} (idempotent operation)", documentId);
+    
     boolean exists = exists(documentId);
     if (!exists) {
-        log.info("No vectors found, skipping (idempotent)");
+        log.info("No vectors found for document: {}, skipping (idempotent)", documentId);
         return; // ✅ 幂等：不存在 = 已经删除成功
     }
+    
     // 执行删除...
 }
 ```
@@ -235,26 +333,35 @@ T3: 检索时 → 返回A3（已不存在于新文档中）❌
 
 **解决方案**:
 ```java
-@Transactional
-public void updateDocument(Document doc) {
-    // 1. 删除旧向量（幂等）
-    vectorService.deleteVectors(doc.getId());
+@Override
+@Transactional(rollbackFor = Exception.class)
+public DocumentUploadResponse updateDocument(Long documentId, DocumentUpdateRequest request) {
+    // 1. 查询旧文档
+    KnowledgeDocument oldDocument = knowledgeDocumentDao.getById(documentId);
     
-    // 2. 重新分块
-    List<DocumentChunk> newChunks = chunkService.split(doc);
+    // 2. 幂等删除旧版本向量
+    vectorService.deleteVectors(documentId);
     
-    // 3. 生成新向量
-    List<float[]> embeddings = embeddingService.generateEmbeddings(
-        newChunks.stream().map(DocumentChunk::getContent).collect(Collectors.toList())
-    );
+    // 3. 保存新文档
+    String filePath = saveDocument(request.getFile());
     
-    // 4. 存储新向量
-    vectorService.storeVectors(doc.getId(), newChunks);
+    // 4. 更新文档记录
+    oldDocument.setTitle(request.getTitle());
+    oldDocument.setIndexStatus(IndexStatus.PENDING.name());
+    knowledgeDocumentDao.updateById(oldDocument);
+    
+    // 5. 触发异步索引
+    documentIndexingProducer.sendIndexingTask(...);
+    
+    // 6. 清除相关缓存
+    documentMetadataCache.invalidateDocumentMetadata(documentId);
+    indexStatusCache.invalidateIndexStatus(documentId);
+    queryResultCache.invalidateByDocumentId(documentId);
 }
 ```
 
 **面试可讲**:
-> "文档更新时有个隐蔽的数据一致性问题：用户编辑文档后，旧版本的分块向量还留在向量库。我们称它为'**幽灵向量**'问题。解决方案是更新时**先删后插**：先幂等删除旧向量，再重新分块、生成向量、存储。为了保证原子性，我们引入了**本地事务表**：记录每个文档的最新版本号，检索时过滤掉旧版本向量。"
+> "文档更新时有个隐蔽的数据一致性问题：用户编辑文档后，旧版本的分块向量还留在向量库。我们称它为'**幽灵向量**'问题。解决方案是更新时**先删后插**：先幂等删除旧向量，再重新分块、生成向量、存储。同时清除相关缓存，保证后续查询不会命中旧数据。"
 
 ---
 
@@ -273,28 +380,21 @@ public void updateDocument(Document doc) {
 
 **解决方案**:
 ```java
-// 方案1: 同步索引（简单场景）
-public void uploadDocument(Document doc) {
-    saveToDB(doc);
-    indexDocument(doc); // 同步索引，用户等待
-}
-
-// 方案2: 异步 + 状态查询（生产环境）
-public void uploadDocument(Document doc) {
-    saveToDB(doc);
-    sendToMQ(doc); // 异步索引
-    // 前端轮询索引状态
-}
-
-// 方案3: 本地缓存兜底（最终采用）
-@Cacheable(value = "recentDocs", key = "#documentId")
-public List<DocumentChunk> getRecentChunks(Long documentId) {
-    // 最近上传的文档直接从 DB 读取，不依赖向量库
+@Override
+public Flux<String> ragQuery(RAGQueryRequest request) {
+    // 1. 检查索引状态
+    if (request.getDocumentId() != null) {
+        String indexStatus = indexStatusCache.getIndexStatus(request.getDocumentId());
+        if (!IndexStatus.COMPLETED.name().equals(indexStatus)) {
+            return Flux.just(getIndexStatusMessage(indexStatus)); // 友好提示
+        }
+    }
+    // 2. 正常 RAG 流程...
 }
 ```
 
 **面试可讲**:
-> "我们采用 MQ 异步索引来提升上传接口响应速度，但引出了'**最终一致性**'问题：用户上传文档后立刻提问，发现检索不到。这是因为索引是异步的，消息还没被消费完。我们的解决方案是**双路读取**：检索时同时查向量库（全量、异步）和本地缓存（最近 5 分钟上传的文档），合并后返回。这保证了用户体验，同时保留了异步索引的性能优势。"
+> "我们采用 MQ 异步索引来提升上传接口响应速度，但引出了'**最终一致性**'问题：用户上传文档后立刻提问，发现检索不到。我们的解决方案是**索引状态检查**：RAG 查询前先检查文档索引状态，如果未完成的直接返回友好提示（'文档正在索引中，请稍后再试'）。这比双路读取更简单可靠，用户体验也能接受。"
 
 ---
 
@@ -308,18 +408,20 @@ public List<DocumentChunk> getRecentChunks(Long documentId) {
 **解决方案**:
 ```java
 // Mock LLM: 返回固定回复
-@Profile("mock")
+@Slf4j
 @Service
+@Profile("mock")
 public class MockLLMService implements LLMService { ... }
 
 // Mock Embedding: 基于文本哈希生成确定性向量
-@Profile("mock")
+@Slf4j
 @Service
+@Profile("mock")
 public class MockEmbeddingService implements EmbeddingService { ... }
 
 // Mock Vector: 内存存储，余弦相似度检索
-@Profile("mock")
 @Service
+@Profile("mock")
 public class MockVectorService implements VectorService { ... }
 ```
 
@@ -356,9 +458,9 @@ Java (Spring Boot) ←──HTTP──→ Python (FastAPI)
 
 ### 模板 1: 项目介绍（2分钟版）
 
-> "我负责的 MallChat AI 模块是一个完整的 RAG 知识问答系统。技术栈上，我们用 **bge-large-zh-v1.5** 做 Embedding，**Qdrant** 做向量检索，**Qwen2.5-14B** 做 LLM，通过 **LLaMA-Factory** 支持领域微调。
+> "我负责的 MallChat AI 模块是一个完整的 RAG 知识问答系统。技术栈上，我们用 **bge-large-zh-v1.5** 做 Embedding，**Qdrant** 做向量检索，**Qwen2.5-14B** 做 LLM，通过 **LLaMA-Factory** 支持领域微调，全部基于 **LangChain4j 0.36.0** 集成。
 >
-> 整个架构采用**分层抽象 + 插件化设计**：Embedding、向量库、LLM 每层都有接口抽象，底层实现通过 Spring 条件注入切换。比如向量库支持 Qdrant（推荐）和 Milvus（备选），LLM 支持 Qwen、Llama、OpenAI 等 6 个提供商，通过 `LLMServiceFactory` 运行时切换。
+> 整个架构采用**分层抽象 + 插件化设计**：Embedding、向量库、LLM 每层都有接口抽象，底层实现通过 Spring 条件注入切换。比如向量库支持 Qdrant（推荐）和 Milvus（备选），LLM 支持 Qwen、Llama、OpenAI、ChatGLM、Mock 等 5 个提供商，通过 `LLMServiceFactory` 运行时切换。
 >
 > 项目中我遇到的最大挑战是**技术栈迁移**：从全部依赖第三方 API 切换到全本地开源方案。涉及 4 个组件同时迁移，我们用 **Mock 兜底 + 逐步替换** 策略，保证迁移过程中业务不中断。"
 
@@ -368,7 +470,7 @@ Java (Spring Boot) ←──HTTP──→ Python (FastAPI)
 >
 > **第一个是 Embedding 维度兼容问题**。bge-large-zh-v1.5 输出 1024 维，m3e-base 输出 768 维，Milvus 的 Collection 创建后维度不可变。我们最初切换模型时必须重建 Collection，数据全丢。最终迁移到 Qdrant 的动态向量特性解决。
 >
-> **第二个是异步索引的最终一致性**。文档上传后走 MQ 异步索引，用户立刻提问时检索不到。我们的解法是双路读取：同时查向量库（全量异步）和本地缓存（最近文档），合并返回。"
+> **第二个是异步索引的最终一致性**。文档上传后走 MQ 异步索引，用户立刻提问时检索不到。我们的解法是索引状态检查：RAG 查询前先检查文档是否索引完成，未完成的返回友好提示。"
 
 ### 模板 3: 如果重新设计（展示反思能力）
 
@@ -401,6 +503,9 @@ Java (Spring Boot) ←──HTTP──→ Python (FastAPI)
 ### Q5: 如果向量库数据量很大（千万级），怎么优化？
 **A**: ① **分片**：按业务域分多个 Collection；② **量化**：向量从 FP32 压缩到 FP16/INT8；③ **索引调优**：HNSW 索引调整 M 和 efConstruction 参数；④ **冷热分离**：热数据在内存，冷数据落盘；⑤ **预过滤**：先按 metadata 过滤再向量检索。
 
+### Q6: LangChain4j 0.36.0 相比 0.27.1 有什么变化？
+**A**: 主要变化：① **Ollama 支持**：原生支持 OllamaChatModel 和 OllamaEmbeddingModel；② **版本兼容性**：与 Spring Boot 2.7.x 兼容；③ **API 稳定性**：StreamingResponseHandler 等核心接口保持稳定；④ **新特性**：支持更多模型提供商和向量存储。
+
 ---
 
-*本文档由 AI Assistant 生成，建议结合个人理解修改后使用。*
+*本文档由 AI Assistant 生成，版本 v1.1，建议结合个人理解修改后使用。*

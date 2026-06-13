@@ -1,7 +1,7 @@
 # MallChat AI模块 - 架构总览与优化路线图
 
 > 本文档描述MallChat项目中AI模块的整体架构、核心流程、技术选型及未来优化方向。
-> 文档版本: v1.0 | 更新时间: 2026-05-17
+> 文档版本: v1.1 | 更新时间: 2026-06-13
 
 ---
 
@@ -27,6 +27,7 @@ MallChat AI模块是一个集成化的智能服务子系统，为即时通讯应
 - **AI智能助手**: 支持多轮对话的通用AI助手
 - **文档智能处理**: 自动解析、分块、索引各类文档
 - **流式交互**: 实时SSE流式输出，提升用户体验
+- **Mock模式**: 无外部依赖即可启动，方便本地开发和测试
 
 ### 1.2 整体架构图
 
@@ -53,18 +54,27 @@ MallChat AI模块是一个集成化的智能服务子系统，为即时通讯应
                        |                               |
            +-----------v---------------+   +-----------v-----------+
            |      LLMService           |   |   VectorService       |
-           |   (OpenAI/ChatGLM/...)    |   |   (Milvus)            |
+           |   (Qwen/Llama/OpenAI/    |   |   (Qdrant/Milvus/     |
+           |    ChatGLM/Mock)          |   |    Mock)              |
            |   - 流式/非流式调用       |   |   - 存储/检索/删除    |
            |   - 熔断降级              |   |   - 相似度搜索        |
            |   - Token计数             |   |   - 幂等操作          |
            +-----------+---------------+   +-----------+-----------+
                        |                               |
            +-----------v---------------+   +-----------v-----------+
-           |   LangChain4j             |   |   EmbeddingService    |
-           |   - ChatLanguageModel     |   |   (OpenAI Embedding)  |
-           |   - StreamingChatModel    |   |   - 文本向量化        |
+           |   LangChain4j 0.36        |   |   EmbeddingService    |
+           |   - ChatLanguageModel     |   |   (bge/m3e/OpenAI/   |
+           |   - StreamingChatModel    |   |    Mock)              |
+           |   - OllamaChatModel       |   |   - 文本向量化        |
            |   - OpenAiTokenizer       |   |   - 批量处理          |
            +---------------------------+   +-----------------------+
+                       |
+           +-----------v---------------+
+           |        Ollama             |
+           |  - qwen2.5:14b [推荐]     |
+           |  - bge-large-zh-v1.5      |
+           |  - llama3:70b [备选]      |
+           +---------------------------+
 ```
 
 ### 1.3 模块依赖关系
@@ -99,7 +109,7 @@ MallChat AI模块是一个集成化的智能服务子系统，为即时通讯应
 
 | 类/接口 | 说明 |
 |---------|------|
-| `AIConversation` | AI对话历史实体 |
+| `AIConversation` | AI对话历史实体（含 `sessionId` 支持多轮对话） |
 | `KnowledgeDocument` | 知识文档实体 |
 | `DocumentChunk` | 文档分块实体 |
 | `ConversationType` | 对话类型枚举(QA/RAG/SUMMARY) |
@@ -131,17 +141,16 @@ public class LLMServiceFactory {
     private Map<LLMProvider, LLMService> serviceMap;
     public LLMService getDefaultService();
     public LLMService getService(LLMProvider provider);
+    public LLMService getFallbackService();
 }
 ```
 
 **已实现**:
-- `OpenAILLMService`: 基于LangChain4j的OpenAI完整实现
-- `ChatGLMLLMService`: ChatGLM框架（待完善初始化）
-
-**待实现**:
-- `QwenLLMService`: 通义千问
-- `DeepSeekLLMService`: DeepSeek
-- `ClaudeLLMService`: Claude
+- `QwenLLMService`: Qwen2.5-14B via Ollama（推荐）
+- `LlamaLLMService`: Llama3-70B via Ollama（备选）
+- `OpenAILLMService`: OpenAI GPT-3.5/4（兼容）
+- `ChatGLMLLMService`: ChatGLM（兼容）
+- `MockLLMService`: Mock模式，返回模拟回复
 
 ** resilience4j 熔断配置**:
 
@@ -154,7 +163,16 @@ resilience4j.circuitbreaker:
       slowCallDurationThreshold: 5s
       slidingWindowSize: 10
       minimumNumberOfCalls: 5
+      waitDurationInOpenState: 30s
+  instances:
+    llmService:
+      baseConfig: default
+      failureRateThreshold: 60
       waitDurationInOpenState: 60s
+    vectorStoreService:
+      baseConfig: default
+      failureRateThreshold: 50
+      waitDurationInOpenState: 30s
 ```
 
 ### 2.3 mallchat-ai-vector (向量服务模块)
@@ -166,12 +184,28 @@ resilience4j.circuitbreaker:
 | 类 | 职责 |
 |----|------|
 | `VectorService` | 向量存储、检索、删除接口 |
-| `MilvusVectorService` | Milvus实现（含连接池管理） |
+| `QdrantVectorService` | Qdrant实现（默认，支持动态向量） |
+| `MilvusVectorService` | Milvus实现（备选） |
+| `MockVectorService` | Mock实现（内存存储） |
 | `EmbeddingService` | 文本向量化接口 |
-| `OpenAIEmbeddingService` | OpenAI Embedding实现 |
-| `MilvusConnectionPool` | Milvus连接池（支持健康检查） |
+| `OllamaBgeEmbeddingService` | BGE Embedding（推荐） |
+| `M3eEmbeddingService` | M3E Embedding（备选） |
+| `OpenAIEmbeddingService` | OpenAI Embedding（兼容） |
+| `MockEmbeddingService` | Mock Embedding |
 
-**Milvus集合设计**:
+**Qdrant集合设计（动态向量）**:
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | PointId (Num) | 向量点ID，使用 chunk_id |
+| document_id | Payload Keyword | 关联文档ID |
+| chunk_id | Payload Keyword | 关联分块ID |
+| chunk_index | Payload Keyword | 分块序号 |
+| content | Payload Keyword | 分块内容 |
+| metadata | Payload Keyword | 元数据JSON（已移除embedding） |
+| vector | Vector | 动态维度（1024/768） |
+
+**Milvus集合设计（备选）**:
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -180,14 +214,12 @@ resilience4j.circuitbreaker:
 | chunk_id | Int64 | 关联分块ID |
 | chunk_index | Int32 | 分块序号 |
 | content | VarChar(65535) | 分块内容 |
-| vector | FloatVector(1536) | 向量数据 |
+| vector | FloatVector(dimension) | 向量数据 |
 | metadata | VarChar(65535) | 元数据JSON |
 
 **索引配置**:
-- 索引类型: IVF_FLAT
-- 度量方式: COSINE
-- nlist: 1024 (聚类中心数)
-- nprobe: 10 (搜索时探测的聚类数)
+- Qdrant: Cosine 距离，on_disk=true，dynamic=true
+- Milvus: IVF_FLAT / COSINE，nlist=1024，nprobe=10
 
 ### 2.4 mallchat-ai-rag (RAG核心模块)
 
@@ -208,7 +240,7 @@ resilience4j.circuitbreaker:
 [Embedding向量化]
     |
     v
-[Milvus相似度检索] --空结果--> 降级到普通QA
+[Qdrant相似度检索] --空结果--> 降级到普通QA
     |有结果
     v
 [构造RAG Prompt]
@@ -250,7 +282,7 @@ resilience4j.circuitbreaker:
 [批量Embedding生成]
     |
     v
-[Milvus向量存储]
+[Qdrant向量存储]
     |
     v
 [更新DB状态 - COMPLETED]
@@ -264,7 +296,7 @@ resilience4j.circuitbreaker:
 | 心跳机制 | 30秒间隔keep-alive |
 | 超时检测 | 300秒连接超时 |
 | 连接管理 | `StreamConnectionManager`跟踪活跃连接 |
-| 事件类型 | message / done / error / heartbeat |
+| 事件类型 | message / done / error / heartbeat / timeout |
 
 ### 2.5 mallchat-ai-assistant (AI助手模块)
 
@@ -361,10 +393,13 @@ Frontend    DocumentCtrl    RAGService    RocketMQ    IndexingConsumer    DocPro
 
 | 层级 | 技术 | 版本 | 选型理由 |
 |------|------|------|----------|
-| 基础框架 | Spring Boot | 2.6.7 | 项目统一版本，兼容Java 17 |
-| AI框架 | LangChain4j | 0.27.1 | 功能丰富，流式支持完善，社区活跃 |
-| LLM | OpenAI API | - | 主流选择，LangChain4j原生支持 |
-| 向量库 | Milvus | 2.3.4 | 高性能，支持海量向量，Java SDK完善 |
+| 基础框架 | Spring Boot | 2.7.x | 项目统一版本，兼容Java 17 |
+| AI框架 | LangChain4j | 0.36.0 | 功能丰富，流式支持完善，支持 Ollama/Qdrant |
+| LLM | Qwen2.5-14B / Llama3-70B | - | 本地开源，中文能力强 |
+| 推理框架 | Ollama | 0.1.30+ | 一键部署，管理方便 |
+| 向量库 | Qdrant | 1.8+ | 动态向量，部署简单 |
+| 向量库（备选）| Milvus | 2.3.4 | 高性能，支持海量向量 |
+| Embedding | bge-large-zh-v1.5 / m3e-base | - | 中文优化，本地部署 |
 | 响应式 | Project Reactor | 3.4.x | Spring生态原生支持 |
 | 文档解析 | Apache Tika | 2.9.1 | 支持多种格式，成熟稳定 |
 | 消息队列 | RocketMQ | 4.9.x | 项目统一中间件 |
@@ -383,8 +418,19 @@ Frontend    DocumentCtrl    RAGService    RocketMQ    IndexingConsumer    DocPro
 | 社区活跃度 | 较新 | 活跃 |
 | 文档质量 | 一般 | 优秀 |
 | 国内模型支持 | 较少 | 较多 |
+| Ollama 支持 | 有限 | 原生支持 |
 
-### 4.3 Java 17兼容性说明
+### 4.3 为什么选Qdrant而非Milvus作为默认
+
+| 对比项 | Qdrant | Milvus |
+|--------|--------|--------|
+| 部署复杂度 | 单容器 | 多组件 |
+| 动态向量 | ✅ 原生支持 | ❌ 需固定维度 |
+| 内存占用 | 低 | 高 |
+| 运维成本 | 低 | 高 |
+| 适用场景 | 中小型项目、快速迭代 | 超大规模 |
+
+### 4.4 Java 17兼容性说明
 
 **关键配置**:
 ```xml
@@ -397,7 +443,7 @@ Frontend    DocumentCtrl    RAGService    RocketMQ    IndexingConsumer    DocPro
 ```
 
 **注意事项**:
-- Spring Boot 2.6.7 内置ASM解析器不支持Java 21 bytecode (major 65)
+- Spring Boot 2.7.x 内置ASM解析器不支持Java 21 bytecode (major 65)
 - 使用JDK 21运行环境时，编译目标必须保持为17
 - `javax.annotation`包通过显式依赖保障兼容性:
   ```xml
@@ -466,9 +512,21 @@ Response:
 ]
 ```
 
+#### 获取用户会话列表
+
+```http
+GET /api/ai/assistant/sessions?userId=10001
+
+Response:
+[
+    "conv_abc123",
+    "conv_def456"
+]
+```
+
 ### 5.2 RAG知识问答接口
 
-#### 流式RAG查询
+#### 标准 SSE 流式RAG查询
 
 ```http
 POST /api/stream/rag/query
@@ -485,16 +543,27 @@ Request:
 
 Response (SSE):
 event: message
-data: {"index":0,"type":"content","data":"MallChat"}
+data: {"index":0,"content":"MallChat","finished":false,"timestamp":1234567890}
 
 event: message
-data: {"index":1,"type":"content","data":"采用"}
+data: {"index":1,"content":"采用","finished":false,"timestamp":1234567891}
 
 event: message
-data: {"index":2,"type":"content","data":"多级缓存策略..."}
+data: {"index":2,"content":"多级缓存策略...","finished":false,"timestamp":1234567892}
 
 event: done
-data: {"index":3,"type":"end"}
+data: {"index":3,"content":"","finished":true,"timestamp":1234567893}
+```
+
+#### 简化流式RAG查询
+
+```http
+POST /api/documents/query
+Content-Type: application/json
+Accept: text/event-stream
+
+Request: 同标准 SSE
+Response: 纯文本流
 ```
 
 ### 5.3 文档管理接口
@@ -536,14 +605,19 @@ Response: "COMPLETED"  // PENDING / INDEXING / COMPLETED / FAILED
 
 - [x] Java 17兼容性修复
 - [x] 循环依赖解决
-- [x] LangChain4j迁移
+- [x] LangChain4j迁移到 0.36.0
 - [x] 流式输出实现
-- [x] 多轮对话支持
+- [x] 多轮对话支持（sessionId）
 - [x] 文档处理流水线
+- [x] Qdrant 向量库接入（动态向量）
+- [x] Ollama Embedding 接入（bge/m3e）
+- [x] Qwen2.5-14B / Llama3-70B 接入
+- [x] Mock 模式完整实现
 
-### Phase 2: 多模型支持 (进行中)
+### Phase 2: 多模型支持 (部分完成)
 
-- [ ] 通义千问(Qwen)接入
+- [x] 通义千问(Qwen)接入
+- [x] Llama3 接入
 - [ ] DeepSeek接入
 - [ ] 文心一言(ERNIE)接入
 - [ ] 模型路由与负载均衡
@@ -654,6 +728,34 @@ public class AIAgent {
 固定Prompt          -->     动态Prompt工程
 单一RAG检索         -->     混合检索+重排序
 ```
+
+---
+
+## 八、Mock 模式
+
+### 8.1 用途
+
+- 本地开发无需部署 Ollama、Qdrant
+- 快速验证接口和流程
+- 面试演示和代码学习
+
+### 8.2 启动方式
+
+```bash
+# 方式1：使用 application-mock.yml
+spring.profiles.active=mock
+
+# 方式2：启动参数
+java -jar mallchat-chat-server.jar --spring.profiles.active=mock
+```
+
+### 8.3 Mock 组件
+
+| 组件 | Mock 实现 | 行为 |
+|------|----------|------|
+| LLM | MockLLMService | 返回固定模拟回复，带打字机效果 |
+| Embedding | MockEmbeddingService | MD5 确定性向量，默认 1024 维 |
+| Vector | MockVectorService | 内存 Map 存储，余弦相似度 |
 
 ---
 
